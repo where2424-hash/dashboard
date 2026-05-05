@@ -4,10 +4,11 @@ export type RequestStatus =
   | "draft"
   | "producer_review"
   | "treasury_review"
-  | "waiting_receipt"
-  | "waiting_payment"
   | "rejected"
-  | "done";
+  | "awaiting_physical_receipts"
+  | "payment_pending"
+  | "cancelled"
+  | "closed";
 
 export interface User {
   id: string;
