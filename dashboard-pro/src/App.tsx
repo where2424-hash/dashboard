@@ -7,7 +7,14 @@ import { RequestDetailPage } from "./pages/RequestDetailPage";
 import { ProjectOverviewPage } from "./pages/ProjectOverviewPage";
 import { NotificationsPage } from "./pages/NotificationsPage";
 import { PlaceholderPage } from "./pages/PlaceholderPage";
+import { CompanySettingsPage } from "./pages/CompanySettingsPage";
+import { CompanyCreatePage } from "./pages/CompanyCreatePage";
+import { CompanyOverviewPage } from "./pages/CompanyOverviewPage";
+import { CompanyMembersPage } from "./pages/CompanyMembersPage";
+import { CompanyAuditPage } from "./pages/CompanyAuditPage";
 import type { Role } from "./types";
+
+type WorkspaceMode = "personal" | "company";
 
 const roleLabel: Record<Role, string> = {
   admin: "Admin",
@@ -18,11 +25,29 @@ const roleLabel: Record<Role, string> = {
 
 export function App() {
   const [role, setRole] = useState<Role>("producer");
+  const [workspace, setWorkspace] = useState<WorkspaceMode>("personal");
+  const [activeCompanyId, setActiveCompanyId] = useState<string>("company-a");
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
   const [notifOpen, setNotifOpen] = useState(false);
   const location = useLocation();
-  const projectNav = useMemo(
+  const companyOptions = useMemo(
     () => [
+      { id: "company-a", name: "牧馬影視製作" },
+      { id: "company-b", name: "木馬創意工作室" }
+    ],
+    []
+  );
+  const projectNav = useMemo(() => {
+    if (workspace === "company") {
+      return [
+        { to: "/company/overview", label: "公司專案總覽", icon: "overview" },
+        { to: "/company/expenses", label: "報帳系統（公司）", icon: "expense", badge: "12" },
+        { to: "/company/members", label: "公司成員管理", icon: "members" },
+        { to: "/company/settings", label: "公司設定", icon: "document" },
+        { to: "/company/audit", label: "公司稽核紀錄", icon: "history" }
+      ];
+    }
+    return [
       { to: "/", label: "首頁", icon: "home" },
       { to: "/projects/1/overview", label: "專案總覽", icon: "overview" },
       { to: "/schedule", label: "日程表", icon: "schedule" },
@@ -30,9 +55,8 @@ export function App() {
       { to: "/expenses", label: "報帳系統", icon: "expense", badge: "3" },
       { to: "/document", label: "文件夾", icon: "document" },
       { to: "/members", label: "成員清單", icon: "members" }
-    ],
-    []
-  );
+    ];
+  }, [workspace]);
   const personalNav = useMemo(
     () => [
       { to: "/history", label: "修改歷程", icon: "history" },
@@ -127,15 +151,50 @@ export function App() {
           </button>
         </div>
         <div className="project-selector">
-          <div className="project-pill">
-            <div className="project-icon">牧</div>
-            <span className="pill-name">牧馬專案 A</span>
+          <div className="project-pill workspace-pill">
+            <button
+              className={workspace === "personal" ? "ws-btn ws-btn-active" : "ws-btn"}
+              onClick={() => setWorkspace("personal")}
+            >
+              個人工作區
+            </button>
+            <button
+              className={workspace === "company" ? "ws-btn ws-btn-active" : "ws-btn"}
+              onClick={() => setWorkspace("company")}
+            >
+              公司工作區
+            </button>
           </div>
+          {workspace === "company" ? (
+            <div className="project-pill workspace-company-row">
+              <div className="project-icon">公</div>
+              <select
+                className="pill-select"
+                value={activeCompanyId}
+                onChange={(e) => setActiveCompanyId(e.target.value)}
+              >
+                {companyOptions.map((c) => (
+                  <option key={c.id} value={c.id}>
+                    {c.name}
+                  </option>
+                ))}
+              </select>
+              <NavLink to="/company/new" className="ws-create-link">
+                建立公司
+              </NavLink>
+            </div>
+          ) : (
+            <div className="project-pill">
+              <div className="project-icon">牧</div>
+              <span className="pill-name">牧馬專案 A</span>
+            </div>
+          )}
         </div>
         <div className="nav-section">
           {projectNav.map((item, idx) => (
             <div key={item.to}>
-              {idx === 1 ? <div className="nav-label">專案模組</div> : null}
+              {idx === 1 && workspace === "personal" ? <div className="nav-label">專案模組</div> : null}
+              {idx === 0 && workspace === "company" ? <div className="nav-label">公司工作區</div> : null}
               <NavLink
                 to={item.to}
                 className={({ isActive }) => (isActive ? "nav active" : "nav")}
@@ -175,25 +234,35 @@ export function App() {
               ? "首頁"
               : location.pathname.startsWith("/projects")
                 ? "專案總覽"
-                : location.pathname.startsWith("/expenses/new")
-                  ? "新增報帳申請"
-                  : location.pathname.startsWith("/expenses/")
-                    ? "申請明細"
-                    : location.pathname.startsWith("/expenses")
-                      ? "報帳系統"
-                      : location.pathname.startsWith("/schedule")
-                        ? "日程表"
-                        : location.pathname.startsWith("/labor")
-                          ? "勞報單"
-                          : location.pathname.startsWith("/document")
-                            ? "文件夾"
-                            : location.pathname.startsWith("/members")
-                              ? "成員清單"
-                              : location.pathname.startsWith("/history")
-                                ? "修改歷程"
-                                : location.pathname.startsWith("/profile")
-                                  ? "個人資料"
-                                  : "通知中心"}
+                : location.pathname.startsWith("/company/overview")
+                  ? "公司專案總覽"
+                  : location.pathname.startsWith("/company/expenses")
+                    ? "報帳系統（公司）"
+                    : location.pathname.startsWith("/company/members")
+                      ? "公司成員管理"
+                      : location.pathname.startsWith("/company/settings")
+                        ? "公司設定"
+                        : location.pathname.startsWith("/company/audit")
+                          ? "公司稽核紀錄"
+                          : location.pathname.startsWith("/expenses/new")
+                            ? "新增報帳申請"
+                            : location.pathname.startsWith("/expenses/")
+                              ? "申請明細"
+                              : location.pathname.startsWith("/expenses")
+                                ? "報帳系統"
+                                : location.pathname.startsWith("/schedule")
+                                  ? "日程表"
+                                  : location.pathname.startsWith("/labor")
+                                    ? "勞報單"
+                                    : location.pathname.startsWith("/document")
+                                      ? "文件夾"
+                                      : location.pathname.startsWith("/members")
+                                        ? "成員清單"
+                                        : location.pathname.startsWith("/history")
+                                          ? "修改歷程"
+                                          : location.pathname.startsWith("/profile")
+                                            ? "個人資料"
+                                            : "通知中心"}
           </span>
           <div className="topbar-right">
             <select
@@ -230,6 +299,12 @@ export function App() {
           <Routes>
             <Route path="/" element={<DashboardPage />} />
             <Route path="/projects/:id/overview" element={<ProjectOverviewPage />} />
+            <Route path="/company/overview" element={<CompanyOverviewPage />} />
+            <Route path="/company/expenses" element={<PlaceholderPage title="報帳系統（公司工作區）" />} />
+            <Route path="/company/members" element={<CompanyMembersPage />} />
+            <Route path="/company/settings" element={<CompanySettingsPage />} />
+            <Route path="/company/new" element={<CompanyCreatePage />} />
+            <Route path="/company/audit" element={<CompanyAuditPage />} />
             <Route path="/schedule" element={<PlaceholderPage title="日程表" />} />
             <Route path="/labor" element={<PlaceholderPage title="勞報單" />} />
             <Route path="/expenses" element={<ExpensesPage role={role} />} />
