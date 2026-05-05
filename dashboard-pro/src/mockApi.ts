@@ -20,7 +20,7 @@ let requests: ExpenseRequest[] = [
     category: "Props",
     amount: 8800,
     summary: "Stage props rental",
-    status: "payment_pending",
+    status: "waiting_payment",
     updatedAt: "2026-05-04 15:20"
   },
   {
@@ -33,17 +33,6 @@ let requests: ExpenseRequest[] = [
     summary: "Crew lunch",
     status: "draft",
     updatedAt: "2026-05-03 17:10"
-  },
-  {
-    id: "4",
-    requestNo: "MUY-2605-004",
-    project: "Project A",
-    applicant: "Gillian Lin",
-    category: "Equipment",
-    amount: 16800,
-    summary: "Camera batteries",
-    status: "treasury_review",
-    updatedAt: "2026-05-05 13:05"
   }
 ];
 
@@ -72,9 +61,4 @@ export async function updateStatus(id: string, status: RequestStatus) {
       ? { ...r, status, updatedAt: new Date().toISOString().slice(0, 16).replace("T", " ") }
       : r
   );
-}
-
-export async function deleteRequest(id: string) {
-  await wait();
-  requests = requests.filter((r) => r.id !== id);
 }
