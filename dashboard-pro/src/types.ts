@@ -4,10 +4,14 @@ export type RequestStatus =
   | "draft"
   | "producer_review"
   | "treasury_review"
-  | "waiting_receipt"
-  | "waiting_payment"
+  | "awaiting_physical_receipts"
+  | "payment_pending"
   | "rejected"
-  | "done";
+  | "cancelled"
+  | "closed";
+
+/** 製片審核時選定；結餘流程專用分支 */
+export type ApplicationType = "reimbursement" | "overage" | "surplus" | "unpaid";
 
 export interface User {
   id: string;
@@ -25,4 +29,10 @@ export interface ExpenseRequest {
   summary: string;
   status: RequestStatus;
   updatedAt: string;
+  invoiceNo?: string;
+  expenseDate?: string;
+  /** 製片選定後才有；mock 可預填 */
+  applicationType?: ApplicationType;
+  /** PRD v4：列表顯示遮罩後帳戶，例如 `玉山 1234****7890` */
+  bankMasked?: string;
 }

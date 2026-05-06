@@ -4,6 +4,7 @@ import { DashboardPage } from "./pages/DashboardPage";
 import { ExpensesPage } from "./pages/ExpensesPage";
 import { NewRequestPage } from "./pages/NewRequestPage";
 import { RequestDetailPage } from "./pages/RequestDetailPage";
+import { ProducerReviewPage } from "./pages/ProducerReviewPage";
 import { ProjectOverviewPage } from "./pages/ProjectOverviewPage";
 import { NotificationsPage } from "./pages/NotificationsPage";
 import { PlaceholderPage } from "./pages/PlaceholderPage";
@@ -246,23 +247,26 @@ export function App() {
                           ? "公司稽核紀錄"
                           : location.pathname.startsWith("/expenses/new")
                             ? "新增報帳申請"
-                            : location.pathname.startsWith("/expenses/")
-                              ? "申請明細"
-                              : location.pathname.startsWith("/expenses")
-                                ? "報帳系統"
-                                : location.pathname.startsWith("/schedule")
-                                  ? "日程表"
-                                  : location.pathname.startsWith("/labor")
-                                    ? "勞報單"
-                                    : location.pathname.startsWith("/document")
-                                      ? "文件夾"
-                                      : location.pathname.startsWith("/members")
-                                        ? "成員清單"
-                                        : location.pathname.startsWith("/history")
-                                          ? "修改歷程"
-                                          : location.pathname.startsWith("/profile")
-                                            ? "個人資料"
-                                            : "通知中心"}
+                            : /\/expenses\/[^/]+\/review$/.test(location.pathname)
+                              ? "製片審核"
+                              : location.pathname.startsWith("/expenses/") &&
+                                  !location.pathname.endsWith("/review")
+                                ? "報帳明細"
+                                : location.pathname.startsWith("/expenses")
+                                  ? "報帳系統"
+                                  : location.pathname.startsWith("/schedule")
+                                    ? "日程表"
+                                    : location.pathname.startsWith("/labor")
+                                      ? "勞報單"
+                                      : location.pathname.startsWith("/document")
+                                        ? "文件夾"
+                                        : location.pathname.startsWith("/members")
+                                          ? "成員清單"
+                                          : location.pathname.startsWith("/history")
+                                            ? "修改歷程"
+                                            : location.pathname.startsWith("/profile")
+                                              ? "個人資料"
+                                              : "通知中心"}
           </span>
           <div className="topbar-right">
             <select
@@ -307,8 +311,9 @@ export function App() {
             <Route path="/company/audit" element={<CompanyAuditPage />} />
             <Route path="/schedule" element={<PlaceholderPage title="日程表" />} />
             <Route path="/labor" element={<PlaceholderPage title="勞報單" />} />
-            <Route path="/expenses" element={<ExpensesPage role={role} />} />
+            <Route path="/expenses" element={<ExpensesPage />} />
             <Route path="/expenses/new" element={<NewRequestPage />} />
+            <Route path="/expenses/:id/review" element={<ProducerReviewPage />} />
             <Route path="/expenses/:id" element={<RequestDetailPage role={role} />} />
             <Route path="/document" element={<PlaceholderPage title="文件夾" />} />
             <Route path="/members" element={<PlaceholderPage title="成員清單" />} />
