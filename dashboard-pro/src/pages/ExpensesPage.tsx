@@ -3,17 +3,42 @@ import { Link, useNavigate } from "react-router-dom";
 import { ExpenseOverviewFlow } from "../components/ExpenseOverviewFlow";
 import { REQUEST_STATUS_LABEL, expenseListBadgeClass } from "../expenseStatus";
 import { listRequests } from "../mockApi";
-import type { ExpenseRequest } from "../types";
+import type { ExpenseRequest, RequestStatus, Role } from "../types";
 
 function formatExpenseDate(iso?: string): string {
   if (!iso?.trim()) return "—";
   return iso.replace(/-/g, "/");
 }
 
-export function ExpensesPage() {
+type TabKey = "all" | "mine" | "todo" | "draft";
+
+const TAB_LABEL: Record<TabKey, string> = {
+  all: "全部申請",
+  mine: "我的申請",
+  todo: "待我審核",
+  draft: "草稿"
+};
+
+const CURRENT_USER_NAME = "Eric Wang";
+
+function roleTodoStatuses(role: Role): RequestStatus[] {
+  if (role === "producer" || role === "admin") return ["producer_review"];
+  if (role === "treasury") return ["treasury_review", "awaiting_physical_receipts", "payment_pending"];
+  return [];
+}
+
+function toCsvCell(v: unknown): string {
+  const s = String(v ?? "");
+  return /[",\n]/.test(s) ? `"${s.replace(/"/g, "\"\"")}"` : s;
+}
+
+export function ExpensesPage({ role }: { role: Role }) {
   const nav = useNavigate();
   const [rows, setRows] = useState<ExpenseRequest[]>([]);
   const [keyword, setKeyword] = useState("");
+  const [tab, setTab] = useState<TabKey>("todo");
+  const [filterOpen, setFilterOpen] = useState(false);
+  const [statusFilter, setStatusFilter] = useState<RequestStatus | "">("");
 
   async function reload() {
     setRows(await listRequests());
@@ -23,10 +48,23 @@ export function ExpensesPage() {
     void reload();
   }, []);
 
+  const byTab = useMemo(() => {
+    const todoSet = new Set(roleTodoStatuses(role));
+    return rows.filter((r) => {
+      if (tab === "all") return true;
+      if (tab === "mine") return r.applicant === CURRENT_USER_NAME;
+      if (tab === "draft") return r.status === "draft";
+      if (tab === "todo") return todoSet.has(r.status);
+      return true;
+    });
+  }, [rows, role, tab]);
+
   const filtered = useMemo(() => {
     const q = keyword.trim().toLowerCase();
-    if (!q) return rows;
-    return rows.filter((r) => {
+    const base = byTab;
+    const withStatus = statusFilter ? base.filter((r) => r.status === statusFilter) : base;
+    if (!q) return withStatus;
+    return withStatus.filter((r) => {
       const blob = [
         r.requestNo,
         r.project,
@@ -41,7 +79,57 @@ export function ExpensesPage() {
         .toLowerCase();
       return blob.includes(q);
     });
-  }, [rows, keyword]);
+  }, [byTab, keyword, statusFilter]);
+
+  const tabCounts = useMemo(() => {
+    const todoSet = new Set(roleTodoStatuses(role));
+    const all = rows.length;
+    const mine = rows.filter((r) => r.applicant === CURRENT_USER_NAME).length;
+    const todo = rows.filter((r) => todoSet.has(r.status)).length;
+    const draft = rows.filter((r) => r.status === "draft").length;
+    return { all, mine, todo, draft };
+  }, [rows, role]);
+
+  function exportCsv() {
+    const header = [
+      "流水號",
+      "專案名稱",
+      "單據日期",
+      "請款人",
+      "發票編號",
+      "金額",
+      "分類",
+      "摘要",
+      "帳戶",
+      "狀態",
+      "最後更新"
+    ].join(",");
+    const lines = filtered.map((r) =>
+      [
+        r.requestNo,
+        r.project,
+        formatExpenseDate(r.expenseDate),
+        r.applicant,
+        r.invoiceNo ?? "",
+        `NT$ ${r.amount.toLocaleString()}`,
+        r.category,
+        r.summary,
+        r.bankMasked ?? "",
+        REQUEST_STATUS_LABEL[r.status],
+        r.updatedAt
+      ]
+        .map(toCsvCell)
+        .join(",")
+    );
+    const csv = [header, ...lines].join("\n");
+    const blob = new Blob([csv], { type: "text/csv;charset=utf-8" });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = `expense_overview_${tab}_${new Date().toISOString().slice(0, 10)}.csv`;
+    a.click();
+    URL.revokeObjectURL(url);
+  }
 
   return (
     <section className="exp-ov">
@@ -62,6 +150,47 @@ export function ExpensesPage() {
 
       <ExpenseOverviewFlow />
 
+      <div className="exp-ov-tabrow" role="tablist" aria-label="報帳總表分頁">
+        <button
+          type="button"
+          className={`exp-ov-tabitem${tab === "all" ? " exp-ov-tabitem--act" : ""}`}
+          onClick={() => setTab("all")}
+          role="tab"
+          aria-selected={tab === "all"}
+        >
+          {TAB_LABEL.all} <span className="exp-ov-tabn">({tabCounts.all})</span>
+        </button>
+        <button
+          type="button"
+          className={`exp-ov-tabitem${tab === "mine" ? " exp-ov-tabitem--act" : ""}`}
+          onClick={() => setTab("mine")}
+          role="tab"
+          aria-selected={tab === "mine"}
+        >
+          {TAB_LABEL.mine} <span className="exp-ov-tabn">({tabCounts.mine})</span>
+        </button>
+        <button
+          type="button"
+          className={`exp-ov-tabitem${tab === "todo" ? " exp-ov-tabitem--act" : ""}`}
+          onClick={() => setTab("todo")}
+          role="tab"
+          aria-selected={tab === "todo"}
+        >
+          {TAB_LABEL.todo}{" "}
+          <span className="exp-ov-tabn exp-ov-tabn--warn">({tabCounts.todo})</span>
+        </button>
+        <button
+          type="button"
+          className={`exp-ov-tabitem${tab === "draft" ? " exp-ov-tabitem--act" : ""}`}
+          onClick={() => setTab("draft")}
+          role="tab"
+          aria-selected={tab === "draft"}
+        >
+          {TAB_LABEL.draft}{" "}
+          <span className="exp-ov-tabn exp-ov-tabn--draft">({tabCounts.draft})</span>
+        </button>
+      </div>
+
       <div className="exp-ov-toolbar">
         <div className="exp-ov-search-box">
           <span className="exp-ov-search-ic" aria-hidden>
@@ -75,13 +204,55 @@ export function ExpensesPage() {
             aria-label="搜尋報帳列表"
           />
         </div>
-        <button type="button" className="exp-ov-filter-btn" title="篩選（即將推出）" disabled>
+        <button
+          type="button"
+          className={`exp-ov-filter-btn${filterOpen ? " exp-ov-filter-btn--act" : ""}`}
+          title="篩選"
+          onClick={() => setFilterOpen((v) => !v)}
+        >
           ⚙ 篩選
         </button>
-        <button type="button" className="exp-ov-filter-btn" title="匯出需記錄操作人與時間（PRD v4）" disabled>
-          📥 匯出 Excel
+        <button
+          type="button"
+          className="exp-ov-filter-btn"
+          title="匯出（示意：CSV；PRD v4 需記錄操作人與時間）"
+          onClick={exportCsv}
+          disabled={filtered.length === 0}
+        >
+          📥 匯出
         </button>
       </div>
+
+      {filterOpen ? (
+        <div className="exp-ov-filter-panel">
+          <div className="exp-ov-filter-row">
+            <span className="exp-ov-filter-lbl">狀態</span>
+            <select
+              className="exp-ov-filter-sel"
+              value={statusFilter}
+              onChange={(e) => setStatusFilter(e.target.value as RequestStatus | "")}
+            >
+              <option value="">全部</option>
+              {Object.entries(REQUEST_STATUS_LABEL).map(([k, v]) => (
+                <option key={k} value={k}>
+                  {v}
+                </option>
+              ))}
+            </select>
+            <button
+              type="button"
+              className="exp-ov-filter-clear"
+              onClick={() => {
+                setStatusFilter("");
+                setKeyword("");
+              }}
+            >
+              清除
+            </button>
+          </div>
+          <div className="exp-ov-filter-note">提示：此處先提供基本篩選；進階條件與匯出稽核記錄將依 PRD v4 再串。</div>
+        </div>
+      ) : null}
 
       <div className="exp-ov-tbl-wrap">
         <div className="exp-ov-table-scroll">

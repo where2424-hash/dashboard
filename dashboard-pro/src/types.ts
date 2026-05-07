@@ -35,4 +35,10 @@ export interface ExpenseRequest {
   applicationType?: ApplicationType;
   /** PRD v4：列表顯示遮罩後帳戶，例如 `玉山 1234****7890` */
   bankMasked?: string;
+  /** 出納核對完成日期（示意；PRD v4 出納步驟②） */
+  cashierVerifiedAt?: string;
+  /** 預計出帳日（示意；狀態待匯款時顯示） */
+  payoutDate?: string;
+  /** 出納步驟①寄發通知次數（示意） */
+  cashierNotifyCount?: number;
 }

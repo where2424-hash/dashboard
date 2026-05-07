@@ -1,6 +1,7 @@
-import { useCallback, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { Link, useNavigate } from "react-router-dom";
-import { createRequest } from "../mockApi";
+import { createRequest, deleteDraft, listRequests } from "../mockApi";
+import type { ExpenseRequest } from "../types";
 
 const CATS = [
   "交通費",
@@ -14,6 +15,34 @@ const CATS = [
   "後製費",
   "其他"
 ];
+
+const BANK_OPTIONS: { code: string; name: string }[] = [
+  { code: "004", name: "臺灣銀行" },
+  { code: "005", name: "土地銀行" },
+  { code: "006", name: "合作金庫" },
+  { code: "007", name: "第一銀行" },
+  { code: "008", name: "華南銀行" },
+  { code: "009", name: "彰化銀行" },
+  { code: "011", name: "上海銀行" },
+  { code: "012", name: "台北富邦" },
+  { code: "013", name: "國泰世華" },
+  { code: "017", name: "兆豐銀行" },
+  { code: "021", name: "花旗銀行" },
+  { code: "050", name: "臺灣企銀" },
+  { code: "052", name: "渣打銀行" },
+  { code: "700", name: "中華郵政" },
+  { code: "803", name: "聯邦銀行" },
+  { code: "806", name: "元大銀行" },
+  { code: "807", name: "永豐銀行" },
+  { code: "808", name: "玉山銀行" },
+  { code: "809", name: "凱基銀行" },
+  { code: "810", name: "星展銀行" },
+  { code: "812", name: "台新銀行" },
+  { code: "816", name: "安泰銀行" },
+  { code: "822", name: "中國信託" }
+];
+
+const BRANCH_SUGGESTIONS = ["信義分行", "敦南分行", "忠孝分行", "板橋分行", "新莊分行", "中山分行"];
 
 type UploadStatus = "ok" | "warn" | "err";
 
@@ -30,6 +59,8 @@ interface UploadRow {
   sum: string;
   tmp: number;
   checked: boolean;
+  /** PRD v4：草稿亦為正式流水號（MMA#00001）；帶入時保留顯示 */
+  expenseNo?: string;
 }
 
 const BATCH_PRESETS: Record<1 | 2, Omit<UploadRow, "id" | "tmp" | "checked">[]> = {
@@ -113,6 +144,17 @@ function dateFieldClass(u: UploadRow): string {
   return "enr-ef";
 }
 
+function formatExpenseDate(iso?: string): string {
+  if (!iso?.trim()) return "—";
+  return iso.replace(/-/g, "/");
+}
+
+function maskAccount(acct: string): string {
+  const raw = (acct ?? "").trim();
+  if (raw.length <= 8) return raw;
+  return `${raw.slice(0, 4)}****${raw.slice(-4)}`;
+}
+
 export function NewRequestPage() {
   const nav = useNavigate();
   const scrollRef = useRef<HTMLDivElement>(null);
@@ -122,6 +164,7 @@ export function NewRequestPage() {
   const [project, setProject] = useState("牧馬專案 A");
   const [requestDate, setRequestDate] = useState("2026/04/25");
   const [summaryNote, setSummaryNote] = useState("");
+  const [projConflict, setProjConflict] = useState(false);
 
   const [basicConfirmed, setBasicConfirmed] = useState(false);
   /** 一旦確認過基本資料，收據／明細／帳戶區塊解鎖；再按「修改」不重新鎖定。 */
@@ -129,11 +172,39 @@ export function NewRequestPage() {
 
   const [uploads, setUploads] = useState<UploadRow[]>([]);
 
-  const [bankName, setBankName] = useState("玉山銀行");
+  const [bankCode, setBankCode] = useState("808");
+  const [bankBranch, setBankBranch] = useState("信義分行");
   const [bankAccount, setBankAccount] = useState("001-234-567890");
   const [bankHolder, setBankHolder] = useState("王大明");
   const [bankConfirmed, setBankConfirmed] = useState(false);
   const [submitUnlocked, setSubmitUnlocked] = useState(false);
+  const [bankEditing, setBankEditing] = useState(false);
+  const [bankBackup, setBankBackup] = useState<null | {
+    code: string;
+    branch: string;
+    acct: string;
+    holder: string;
+  }>(null);
+
+  // ── draft banner panel (draft_page_v4) ──
+  const [draftPanelOpen, setDraftPanelOpen] = useState(false);
+  const [drafts, setDrafts] = useState<ExpenseRequest[]>([]);
+  const [draftSel, setDraftSel] = useState<Record<string, boolean>>({});
+
+  async function reloadDrafts() {
+    const all = await listRequests();
+    const d = all.filter((r) => r.status === "draft");
+    setDrafts(d);
+    setDraftSel((prev) => {
+      const next: Record<string, boolean> = {};
+      for (const row of d) next[row.id] = prev[row.id] ?? false;
+      return next;
+    });
+  }
+
+  useEffect(() => {
+    void reloadDrafts();
+  }, []);
 
   const unlockSections = basicFlowStarted;
 
@@ -160,11 +231,26 @@ export function NewRequestPage() {
   function confirmBank() {
     setBankConfirmed(true);
     setSubmitUnlocked(true);
+    setBankEditing(false);
+    setBankBackup(null);
     scrollToSection("enr-sec-submit");
   }
 
   function editBank() {
-    setBankConfirmed(false);
+    setBankBackup({ code: bankCode, branch: bankBranch, acct: bankAccount, holder: bankHolder });
+    setBankEditing(true);
+    setSubmitUnlocked(false);
+  }
+
+  function cancelEditBank() {
+    if (bankBackup) {
+      setBankCode(bankBackup.code);
+      setBankBranch(bankBackup.branch);
+      setBankAccount(bankBackup.acct);
+      setBankHolder(bankBackup.holder);
+    }
+    setBankEditing(false);
+    setBankBackup(null);
     setSubmitUnlocked(false);
   }
 
@@ -183,6 +269,70 @@ export function NewRequestPage() {
       }
       return next;
     });
+  }
+
+  const draftStats = useMemo(() => {
+    const ids = Object.keys(draftSel).filter((id) => draftSel[id]);
+    const selRows = drafts.filter((d) => ids.includes(d.id));
+    const total = selRows.reduce((s, r) => s + r.amount, 0);
+    return { ids, selRows, total };
+  }, [draftSel, drafts]);
+
+  function toggleDraftAll(v: boolean) {
+    setDraftSel((prev) => {
+      const next = { ...prev };
+      for (const d of drafts) next[d.id] = v;
+      return next;
+    });
+  }
+
+  async function doDeleteSelectedDrafts() {
+    if (draftStats.ids.length === 0) return;
+    // 簡化：直接刪除，不做二次確認（UI 後續可補）
+    for (const id of draftStats.ids) await deleteDraft(id);
+    await reloadDrafts();
+  }
+
+  function doEnterDrafts() {
+    if (draftStats.selRows.length === 0) return;
+    const sel = draftStats.selRows;
+
+    const projSet = new Set(sel.map((d) => d.project));
+    const conflict = projSet.size > 1;
+    setProjConflict(conflict);
+    if (!conflict) setProject(sel[sel.length - 1]?.project ?? project);
+    if (conflict) setProject("");
+
+    setApplicant(sel[sel.length - 1]?.applicant ?? applicant);
+    setRequestDate(new Date().toISOString().slice(0, 10).replace(/-/g, "/"));
+
+    setBasicFlowStarted(true);
+    setBasicConfirmed(true);
+
+    setUploads((prev) => {
+      const next = [...prev];
+      for (const d of sel) {
+        next.push({
+          id: `u${uidSeq++}`,
+          name: `draft_${d.requestNo}.pdf`,
+          size: "—",
+          batch: 1,
+          status: "ok",
+          amt: d.amount,
+          inv: d.invoiceNo ?? "",
+          date: d.expenseDate ? d.expenseDate.replace(/-/g, "/") : "",
+          cat: d.category,
+          sum: d.summary,
+          tmp: tempSeq++,
+          checked: true,
+          expenseNo: d.requestNo
+        });
+      }
+      return next;
+    });
+
+    setDraftPanelOpen(false);
+    scrollToSection("enr-sec-review");
   }
 
   function removeUpload(id: string) {
@@ -306,7 +456,13 @@ export function NewRequestPage() {
           </div>
 
           <div className="enr-scroll-area" ref={scrollRef}>
-            <button type="button" className="enr-draft-banner" onClick={() => setView("draft")}>
+            {/* 草稿橫幅（draft_page_v4：可展開、可勾選帶入） */}
+            <button
+              type="button"
+              className="enr-draft-banner"
+              onClick={() => setDraftPanelOpen((v) => !v)}
+              disabled={drafts.length === 0}
+            >
               <div className="enr-db-ic" aria-hidden>
                 <svg viewBox="0 0 13 13" fill="none">
                   <circle cx="6.5" cy="6.5" r="5.5" stroke="currentColor" strokeWidth="1.2" />
@@ -319,27 +475,97 @@ export function NewRequestPage() {
                 </svg>
               </div>
               <div className="enr-db-text">
-                <div className="enr-db-t">你有 10 筆草稿未完成（Temp#003 ~ Temp#012）</div>
-                <div className="enr-db-s">點擊此處或「前往草稿」切換至草稿頁面</div>
+                <div className="enr-db-t">你有 {drafts.length} 筆草稿未完成</div>
+                <div className="enr-db-s">點擊展開後可勾選多筆草稿帶入此次申請</div>
               </div>
-              <span
-                role="button"
-                tabIndex={0}
-                className="enr-db-btn"
-                onClick={(e) => {
-                  e.stopPropagation();
-                  setView("draft");
-                }}
-                onKeyDown={(e) => {
-                  if (e.key === "Enter" || e.key === " ") {
-                    e.preventDefault();
-                    setView("draft");
-                  }
-                }}
-              >
-                前往草稿 ↗
+              <span className="enr-db-btn" onClick={(e) => e.stopPropagation()}>
+                {draftPanelOpen ? "收起草稿 ▴" : "展開草稿 ▾"}
               </span>
             </button>
+
+            {draftPanelOpen ? (
+              <div className="enr-draft-panel">
+                <div className="enr-dp-toolbar">
+                  <input
+                    type="checkbox"
+                    checked={draftStats.ids.length > 0 && draftStats.ids.length === drafts.length}
+                    ref={(el) => {
+                      if (!el) return;
+                      el.indeterminate = draftStats.ids.length > 0 && draftStats.ids.length < drafts.length;
+                    }}
+                    onChange={(e) => toggleDraftAll(e.target.checked)}
+                  />
+                  <span className="enr-dp-selinfo">
+                    {draftStats.ids.length === 0
+                      ? "未選取任何草稿"
+                      : `已選 ${draftStats.ids.length} 筆・合計 NT$ ${draftStats.total.toLocaleString()}`}
+                  </span>
+                  <button
+                    type="button"
+                    className="enr-dp-btn enr-dp-btn--del"
+                    disabled={draftStats.ids.length === 0}
+                    onClick={() => void doDeleteSelectedDrafts()}
+                  >
+                    刪除選取
+                  </button>
+                  <button
+                    type="button"
+                    className="enr-dp-btn enr-dp-btn--enter"
+                    disabled={draftStats.ids.length === 0}
+                    onClick={doEnterDrafts}
+                  >
+                    帶入申請 →
+                  </button>
+                  <button type="button" className="enr-dp-btn" onClick={() => setDraftPanelOpen(false)}>
+                    取消
+                  </button>
+                </div>
+                <div className="enr-dp-tablewrap">
+                  <table className="enr-dp-table">
+                    <thead>
+                      <tr>
+                        <th style={{ width: 32 }} />
+                        <th>草稿編號</th>
+                        <th>收據</th>
+                        <th>單據日期</th>
+                        <th>發票號碼</th>
+                        <th>分類</th>
+                        <th style={{ textAlign: "right" }}>金額</th>
+                        <th>摘要</th>
+                        <th>建立時間</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {drafts.map((d) => (
+                        <tr key={d.id} className={draftSel[d.id] ? "enr-dp-row--sel" : ""}>
+                          <td style={{ textAlign: "center" }}>
+                            <input
+                              type="checkbox"
+                              checked={!!draftSel[d.id]}
+                              onChange={(e) => setDraftSel((p) => ({ ...p, [d.id]: e.target.checked }))}
+                            />
+                          </td>
+                          <td>
+                            <span className="enr-dp-sn">{d.requestNo}</span>
+                          </td>
+                          <td>
+                            <span className="enr-dp-thumb" aria-hidden>
+                              📄
+                            </span>
+                          </td>
+                          <td>{formatExpenseDate(d.expenseDate)}</td>
+                          <td className="enr-dp-mono">{d.invoiceNo ?? "—"}</td>
+                          <td>{d.category}</td>
+                          <td style={{ textAlign: "right", fontWeight: 500 }}>NT$ {d.amount.toLocaleString()}</td>
+                          <td>{d.summary}</td>
+                          <td className="enr-dp-muted">{d.updatedAt}</td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              </div>
+            ) : null}
 
             <div className="enr-sec" id="enr-sec-basic">
               <div className="enr-sec-head">
@@ -396,11 +622,17 @@ export function NewRequestPage() {
                       value={project}
                       onChange={(e) => setProject(e.target.value)}
                     >
+                      <option value="">— 請選擇 —</option>
                       <option>牧馬專案 A</option>
                       <option>牧馬專案 B</option>
                       <option>牧馬專案 C</option>
                     </select>
                     <div className="enr-inp-hint">預設為目前選取的專案，可切換</div>
+                    {projConflict ? (
+                      <div className="enr-inp-hint" style={{ color: "#A32D2D" }}>
+                        ⚠ 草稿來自不同專案，請手動選擇
+                      </div>
+                    ) : null}
                   </div>
                   <div className="enr-field">
                     <label>
@@ -556,8 +788,8 @@ export function NewRequestPage() {
               </div>
               <div className="enr-sec-body">
                 <div className="enr-table-note">
-                  草稿以 <b>Temp#</b> 暫存，送出後才產生正式流水號。勾選項目所有 <b>*</b>{" "}
-                  欄位須填完整，缺漏時顯示提示且送出按鈕鎖定。
+                  PRD v4：草稿階段即產生正式流水號（例如 <b>MMA#00001</b>）。勾選項目所有 <b>*</b> 欄位須填完整，
+                  缺漏時顯示提示且送出按鈕鎖定。
                 </div>
                 <div className="enr-rt-wrap">
                   <table className="enr-rt">
@@ -573,7 +805,7 @@ export function NewRequestPage() {
                           />
                         </th>
                         <th style={{ width: 18 }} />
-                        <th style={{ width: 64 }}>草稿編號</th>
+                        <th style={{ width: 88 }}>流水號</th>
                         <th style={{ width: 22 }}>收據</th>
                         <th style={{ width: 82 }}>單據日期 *</th>
                         <th style={{ width: 98 }}>發票號碼 *</th>
@@ -622,7 +854,7 @@ export function NewRequestPage() {
                             </td>
                             <td>
                               <span className={`enr-temp-b ${isDraft ? "enr-temp-b-gray" : ""}`}>
-                                Temp#{String(u.tmp).padStart(3, "0")}
+                                {u.expenseNo ?? `MMA#${String(u.tmp).padStart(5, "0")}`}
                               </span>
                             </td>
                             <td>
@@ -755,15 +987,26 @@ export function NewRequestPage() {
                   )}
                 </div>
                 <div>
-                  {bankConfirmed ? (
+                  {bankConfirmed && !bankEditing ? (
                     <button type="button" className="enr-btn-edit-sm" onClick={editBank}>
                       修改
                     </button>
-                  ) : (
+                  ) : null}
+                  {!bankConfirmed && !bankEditing ? (
                     <button type="button" className="enr-btn-confirm" onClick={confirmBank}>
                       確認帳戶資料
                     </button>
-                  )}
+                  ) : null}
+                  {bankEditing ? (
+                    <>
+                      <button type="button" className="enr-btn-confirm" onClick={confirmBank}>
+                        確認修改
+                      </button>
+                      <button type="button" className="enr-btn-edit-sm" onClick={cancelEditBank}>
+                        取消
+                      </button>
+                    </>
+                  ) : null}
                 </div>
               </div>
               <div className="enr-sec-body">
@@ -774,15 +1017,37 @@ export function NewRequestPage() {
                     </label>
                     <select
                       className="enr-sel"
-                      value={bankName}
-                      onChange={(e) => setBankName(e.target.value)}
+                      value={bankCode}
+                      onChange={(e) => setBankCode(e.target.value)}
+                      disabled={bankConfirmed && !bankEditing}
                     >
-                      <option>玉山銀行</option>
-                      <option>國泰世華銀行</option>
-                      <option>台新銀行</option>
-                      <option>中信銀行</option>
-                      <option>富邦銀行</option>
+                      <option value="">— 請選擇銀行 —</option>
+                      {BANK_OPTIONS.map((b) => (
+                        <option key={b.code} value={b.code}>
+                          {b.code} {b.name}
+                        </option>
+                      ))}
                     </select>
+                    <div className="enr-inp-hint">
+                      代碼：{bankCode ? `${bankCode} ${BANK_OPTIONS.find((b) => b.code === bankCode)?.name ?? ""}` : "—"}
+                    </div>
+                  </div>
+                  <div className="enr-field">
+                    <label>
+                      分行 <span className="enr-req">*</span>
+                    </label>
+                    <input
+                      className="enr-inp"
+                      value={bankBranch}
+                      onChange={(e) => setBankBranch(e.target.value)}
+                      list="enr-branch-list"
+                      readOnly={bankConfirmed && !bankEditing}
+                    />
+                    <datalist id="enr-branch-list">
+                      {BRANCH_SUGGESTIONS.map((b) => (
+                        <option key={b} value={b} />
+                      ))}
+                    </datalist>
                   </div>
                   <div className="enr-field">
                     <label>
@@ -790,8 +1055,9 @@ export function NewRequestPage() {
                     </label>
                     <input
                       className="enr-inp"
-                      value={bankAccount}
+                      value={bankConfirmed && !bankEditing ? maskAccount(bankAccount) : bankAccount}
                       onChange={(e) => setBankAccount(e.target.value)}
+                      readOnly={bankConfirmed && !bankEditing}
                     />
                   </div>
                   <div className="enr-field">
@@ -802,11 +1068,16 @@ export function NewRequestPage() {
                       className="enr-inp"
                       value={bankHolder}
                       onChange={(e) => setBankHolder(e.target.value)}
+                      readOnly={bankConfirmed && !bankEditing}
                     />
                   </div>
                 </div>
                 <div className="enr-bank-notice">
-                  預設從個人資料帶入，可於此直接修改，不影響個人資料頁的設定
+                  {bankEditing
+                    ? "修改後請點「確認修改」儲存"
+                    : bankConfirmed
+                      ? "帳戶資料已確認，如需修改請點右上角「修改」"
+                      : "預設從個人資料帶入，可於此直接修改，不影響個人資料頁的設定"}
                 </div>
               </div>
             </div>
@@ -932,7 +1203,7 @@ export function NewRequestPage() {
                         <input type="checkbox" style={{ width: 11, height: 11 }} />
                       </td>
                       <td>
-                        <span className="enr-sn-am">Temp#001</span>
+                        <span className="enr-sn-am">MMA#00001</span>
                       </td>
                       <td style={{ color: "var(--color-text-tertiary)" }}>2026/04/25</td>
                       <td>AB-12345678</td>
@@ -953,7 +1224,7 @@ export function NewRequestPage() {
                         <input type="checkbox" style={{ width: 11, height: 11 }} />
                       </td>
                       <td>
-                        <span className="enr-sn-am">Temp#002</span>
+                        <span className="enr-sn-am">MMA#00002</span>
                       </td>
                       <td style={{ color: "var(--color-text-tertiary)" }}>2026/04/25</td>
                       <td>BC-23456789</td>
@@ -974,7 +1245,7 @@ export function NewRequestPage() {
                         <input type="checkbox" style={{ width: 11, height: 11 }} />
                       </td>
                       <td>
-                        <span className="enr-sn-am">Temp#003</span>
+                        <span className="enr-sn-am">MMA#00003</span>
                       </td>
                       <td style={{ color: "var(--color-text-tertiary)" }}>2026/04/25</td>
                       <td>CD-34567890</td>
@@ -995,7 +1266,7 @@ export function NewRequestPage() {
                         <input type="checkbox" style={{ width: 11, height: 11 }} />
                       </td>
                       <td>
-                        <span className="enr-sn-am">Temp#004</span>
+                        <span className="enr-sn-am">MMA#00004</span>
                       </td>
                       <td style={{ color: "var(--color-text-tertiary)" }}>2026/04/25</td>
                       <td style={{ color: "#A32D2D" }}>辨識失敗</td>
@@ -1016,7 +1287,7 @@ export function NewRequestPage() {
                         <input type="checkbox" style={{ width: 11, height: 11 }} />
                       </td>
                       <td>
-                        <span className="enr-sn-am">Temp#005</span>
+                        <span className="enr-sn-am">MMA#00005</span>
                       </td>
                       <td style={{ color: "var(--color-text-tertiary)" }}>2026/04/20</td>
                       <td>EF-99887766</td>

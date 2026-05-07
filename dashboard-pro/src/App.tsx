@@ -5,6 +5,7 @@ import { ExpensesPage } from "./pages/ExpensesPage";
 import { NewRequestPage } from "./pages/NewRequestPage";
 import { RequestDetailPage } from "./pages/RequestDetailPage";
 import { ProducerReviewPage } from "./pages/ProducerReviewPage";
+import { CashierReviewPage } from "./pages/CashierReviewPage";
 import { ProjectOverviewPage } from "./pages/ProjectOverviewPage";
 import { NotificationsPage } from "./pages/NotificationsPage";
 import { PlaceholderPage } from "./pages/PlaceholderPage";
@@ -249,6 +250,8 @@ export function App() {
                             ? "新增報帳申請"
                             : /\/expenses\/[^/]+\/review$/.test(location.pathname)
                               ? "製片審核"
+                              : /\/expenses\/[^/]+\/cashier$/.test(location.pathname)
+                                ? "出納審核"
                               : location.pathname.startsWith("/expenses/") &&
                                   !location.pathname.endsWith("/review")
                                 ? "報帳明細"
@@ -311,9 +314,10 @@ export function App() {
             <Route path="/company/audit" element={<CompanyAuditPage />} />
             <Route path="/schedule" element={<PlaceholderPage title="日程表" />} />
             <Route path="/labor" element={<PlaceholderPage title="勞報單" />} />
-            <Route path="/expenses" element={<ExpensesPage />} />
+            <Route path="/expenses" element={<ExpensesPage role={role} />} />
             <Route path="/expenses/new" element={<NewRequestPage />} />
             <Route path="/expenses/:id/review" element={<ProducerReviewPage />} />
+            <Route path="/expenses/:id/cashier" element={<CashierReviewPage />} />
             <Route path="/expenses/:id" element={<RequestDetailPage role={role} />} />
             <Route path="/document" element={<PlaceholderPage title="文件夾" />} />
             <Route path="/members" element={<PlaceholderPage title="成員清單" />} />

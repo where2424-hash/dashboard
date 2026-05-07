@@ -186,6 +186,12 @@ export async function updateStatus(id: string, status: RequestStatus) {
   );
 }
 
+/** 草稿刪除（PRD v4：刪除後附件同步刪除；此處僅移除 mock 資料） */
+export async function deleteDraft(id: string) {
+  await wait();
+  requests = requests.filter((r) => !(r.id === id && r.status === "draft"));
+}
+
 /** 製片核准：選定申請類型並進入出納審核中（PRD v4） */
 export async function producerApprove(id: string, applicationType: ApplicationType) {
   await wait();
@@ -203,5 +209,38 @@ export async function producerReject(id: string) {
   const ts = new Date().toISOString().slice(0, 16).replace("T", " ");
   requests = requests.map((r) =>
     r.id === id ? { ...r, status: "rejected" as RequestStatus, updatedAt: ts } : r
+  );
+}
+
+/** 出納步驟①：明細/單據確認 → 待收實體單據 */
+export async function cashierConfirmDetails(id: string, notifyCount: number) {
+  await wait();
+  const ts = new Date().toISOString().slice(0, 16).replace("T", " ");
+  requests = requests.map((r) =>
+    r.id === id
+      ? {
+          ...r,
+          status: "awaiting_physical_receipts" as RequestStatus,
+          cashierNotifyCount: notifyCount,
+          updatedAt: ts
+        }
+      : r
+  );
+}
+
+/** 出納步驟②：單據核對完成 → 待匯款（並帶入預計出帳日） */
+export async function cashierVerifyAndSchedulePayout(id: string, verifiedAt: string, payoutDate: string) {
+  await wait();
+  const ts = new Date().toISOString().slice(0, 16).replace("T", " ");
+  requests = requests.map((r) =>
+    r.id === id
+      ? {
+          ...r,
+          status: "payment_pending" as RequestStatus,
+          cashierVerifiedAt: verifiedAt,
+          payoutDate,
+          updatedAt: ts
+        }
+      : r
   );
 }

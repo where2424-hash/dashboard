@@ -31,6 +31,9 @@ export function RequestDetailPage({ role }: { role: Role }) {
   const canReject = role === "producer" || role === "treasury" || role === "admin";
   const canProducerReview =
     (role === "producer" || role === "admin") && row.status === "producer_review";
+  const canCashierReview =
+    (role === "treasury" || role === "admin") &&
+    (row.status === "treasury_review" || row.status === "awaiting_physical_receipts" || row.status === "payment_pending");
   const typeLabel = row.applicationType ? APPLICATION_TYPE_LABEL[row.applicationType] : "—（送出後由製片選定）";
 
   return (
@@ -51,6 +54,11 @@ export function RequestDetailPage({ role }: { role: Role }) {
           {canProducerReview ? (
             <Link to={`/expenses/${row.id}/review`} className="rd-btn rd-btn--primary">
               製片審核
+            </Link>
+          ) : null}
+          {canCashierReview ? (
+            <Link to={`/expenses/${row.id}/cashier`} className="rd-btn rd-btn--primary">
+              出納審核
             </Link>
           ) : null}
         </div>
