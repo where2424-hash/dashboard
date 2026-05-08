@@ -52,6 +52,9 @@ interface UploadRow {
   size: string;
   batch: 1 | 2;
   status: UploadStatus;
+  /** PRD v5：型態（必填） */
+  receiptType: "" | "invoice" | "receipt";
+  /** PRD v5：總額（原金額，含稅，可由 AI 帶入或手動輸入） */
   amt: number;
   inv: string;
   date: string;
@@ -70,6 +73,7 @@ const BATCH_PRESETS: Record<1 | 2, Omit<UploadRow, "id" | "tmp" | "checked">[]> 
       size: "1.2 MB",
       batch: 1,
       status: "ok",
+      receiptType: "invoice",
       amt: 3500,
       inv: "AB-12345678",
       date: "2026/04/17",
@@ -81,6 +85,7 @@ const BATCH_PRESETS: Record<1 | 2, Omit<UploadRow, "id" | "tmp" | "checked">[]> 
       size: "870 KB",
       batch: 1,
       status: "ok",
+      receiptType: "receipt",
       amt: 1200,
       inv: "BC-23456789",
       date: "2026/04/18",
@@ -92,6 +97,7 @@ const BATCH_PRESETS: Record<1 | 2, Omit<UploadRow, "id" | "tmp" | "checked">[]> 
       size: "2.4 MB",
       batch: 1,
       status: "warn",
+      receiptType: "invoice",
       amt: 8800,
       inv: "CD-34567890",
       date: "2026/04/1",
@@ -105,6 +111,7 @@ const BATCH_PRESETS: Record<1 | 2, Omit<UploadRow, "id" | "tmp" | "checked">[]> 
       size: "1.6 MB",
       batch: 2,
       status: "err",
+      receiptType: "",
       amt: 0,
       inv: "",
       date: "",
@@ -116,6 +123,7 @@ const BATCH_PRESETS: Record<1 | 2, Omit<UploadRow, "id" | "tmp" | "checked">[]> 
       size: "980 KB",
       batch: 2,
       status: "ok",
+      receiptType: "invoice",
       amt: 5400,
       inv: "EF-56789012",
       date: "2026/04/21",
@@ -128,10 +136,19 @@ const BATCH_PRESETS: Record<1 | 2, Omit<UploadRow, "id" | "tmp" | "checked">[]> 
 let uidSeq = 1;
 let tempSeq = 1;
 
+function calcTaxAmount(totalAmount: number): number {
+  return Math.floor(totalAmount * 0.05);
+}
+
+function calcSalesAmount(totalAmount: number): number {
+  return totalAmount - calcTaxAmount(totalAmount);
+}
+
 function isRowComplete(u: UploadRow): boolean {
   return (
     u.date.trim() !== "" &&
     u.inv.trim() !== "" &&
+    u.receiptType !== "" &&
     u.cat !== "" &&
     u.amt > 0 &&
     u.sum.trim() !== ""
@@ -274,7 +291,7 @@ export function NewRequestPage() {
   const draftStats = useMemo(() => {
     const ids = Object.keys(draftSel).filter((id) => draftSel[id]);
     const selRows = drafts.filter((d) => ids.includes(d.id));
-    const total = selRows.reduce((s, r) => s + r.amount, 0);
+    const total = selRows.reduce((s, r) => s + r.totalAmount, 0);
     return { ids, selRows, total };
   }, [draftSel, drafts]);
 
@@ -318,7 +335,8 @@ export function NewRequestPage() {
           size: "—",
           batch: 1,
           status: "ok",
-          amt: d.amount,
+          receiptType: d.receiptType,
+          amt: d.totalAmount,
           inv: d.invoiceNo ?? "",
           date: d.expenseDate ? d.expenseDate.replace(/-/g, "/") : "",
           cat: d.category,
@@ -412,7 +430,8 @@ export function NewRequestPage() {
       project,
       applicant,
       category: catLabel,
-      amount: stats.sum,
+      receiptType: selected[0]?.receiptType === "" ? "invoice" : (selected[0]?.receiptType ?? "invoice"),
+      totalAmount: stats.sum,
       summary: summaryText,
       status: "producer_review",
       invoiceNo: selected[0]?.inv,
@@ -529,8 +548,11 @@ export function NewRequestPage() {
                         <th>收據</th>
                         <th>單據日期</th>
                         <th>發票號碼</th>
+                        <th>型態</th>
                         <th>分類</th>
-                        <th style={{ textAlign: "right" }}>金額</th>
+                        <th style={{ textAlign: "right" }}>總額</th>
+                        <th style={{ textAlign: "right" }}>銷售額</th>
+                        <th style={{ textAlign: "right" }}>稅額</th>
                         <th>摘要</th>
                         <th>建立時間</th>
                       </tr>
@@ -555,8 +577,11 @@ export function NewRequestPage() {
                           </td>
                           <td>{formatExpenseDate(d.expenseDate)}</td>
                           <td className="enr-dp-mono">{d.invoiceNo ?? "—"}</td>
+                          <td>{d.receiptType === "invoice" ? "發票" : "收據"}</td>
                           <td>{d.category}</td>
-                          <td style={{ textAlign: "right", fontWeight: 500 }}>NT$ {d.amount.toLocaleString()}</td>
+                          <td style={{ textAlign: "right", fontWeight: 500 }}>NT$ {d.totalAmount.toLocaleString()}</td>
+                          <td style={{ textAlign: "right", fontWeight: 500 }}>NT$ {d.salesAmount.toLocaleString()}</td>
+                          <td style={{ textAlign: "right", fontWeight: 500 }}>NT$ {d.taxAmount.toLocaleString()}</td>
                           <td>{d.summary}</td>
                           <td className="enr-dp-muted">{d.updatedAt}</td>
                         </tr>
@@ -809,8 +834,11 @@ export function NewRequestPage() {
                         <th style={{ width: 22 }}>收據</th>
                         <th style={{ width: 82 }}>單據日期 *</th>
                         <th style={{ width: 98 }}>發票號碼 *</th>
+                        <th style={{ width: 72 }}>型態 *</th>
                         <th style={{ width: 80 }}>分類 *</th>
-                        <th style={{ width: 68 }}>金額 *</th>
+                        <th style={{ width: 72 }}>總額 *</th>
+                        <th style={{ width: 72 }}>銷售額</th>
+                        <th style={{ width: 72 }}>稅額</th>
                         <th>摘要 *</th>
                         <th style={{ width: 42 }} />
                       </tr>
@@ -899,6 +927,17 @@ export function NewRequestPage() {
                             </td>
                             <td>
                               <select
+                                className={u.receiptType === "" ? "enr-cs enr-cs-err" : "enr-cs"}
+                                value={u.receiptType}
+                                onChange={(e) => patchUpload(u.id, "receiptType", e.target.value)}
+                              >
+                                <option value="">—</option>
+                                <option value="invoice">發票</option>
+                                <option value="receipt">收據</option>
+                              </select>
+                            </td>
+                            <td>
+                              <select
                                 className={u.cat === "" ? "enr-cs enr-cs-err" : "enr-cs"}
                                 value={u.cat}
                                 onChange={(e) => patchUpload(u.id, "cat", e.target.value)}
@@ -920,6 +959,24 @@ export function NewRequestPage() {
                                 placeholder="0"
                                 style={{ textAlign: "right" }}
                                 onChange={(e) => patchUpload(u.id, "amt", e.target.value)}
+                              />
+                            </td>
+                            <td>
+                              <input
+                                className="enr-ef"
+                                value={u.amt > 0 ? calcSalesAmount(u.amt).toLocaleString() : ""}
+                                placeholder="—"
+                                style={{ textAlign: "right" }}
+                                readOnly
+                              />
+                            </td>
+                            <td>
+                              <input
+                                className="enr-ef"
+                                value={u.amt > 0 ? calcTaxAmount(u.amt).toLocaleString() : ""}
+                                placeholder="—"
+                                style={{ textAlign: "right" }}
+                                readOnly
                               />
                             </td>
                             <td>
@@ -1105,7 +1162,7 @@ export function NewRequestPage() {
                     <span className="enr-sd-v enr-sd-v-ok">{stats.sel} 張</span>
                   </div>
                   <div className="enr-sdr">
-                    <span className="enr-sd-l">送出合計金額</span>
+                    <span className="enr-sd-l">送出合計總額</span>
                     <span className="enr-sd-v">NT$ {stats.sum.toLocaleString()}</span>
                   </div>
                   <div className="enr-submit-note">
@@ -1191,7 +1248,7 @@ export function NewRequestPage() {
                       <th style={{ width: 78 }}>建立日期</th>
                       <th style={{ width: 88 }}>發票號碼</th>
                       <th style={{ width: 68 }}>分類</th>
-                      <th style={{ width: 68 }}>金額</th>
+                      <th style={{ width: 68 }}>總額</th>
                       <th style={{ width: 88 }}>摘要</th>
                       <th style={{ width: 70 }}>狀態</th>
                       <th style={{ width: 48 }} />

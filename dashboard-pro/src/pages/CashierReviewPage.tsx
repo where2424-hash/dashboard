@@ -260,7 +260,10 @@ export function CashierReviewPage() {
         <div className="csv-sec">
           <div className="csv-sec-head">
             <span className="csv-sh-t">費用明細</span>
-            <span className="csv-sh-s">示意 · NT$ {cur.amount.toLocaleString()}</span>
+            <span className="csv-sh-s">
+              示意 · 總額 NT$ {cur.totalAmount.toLocaleString()}（銷售額 NT$ {cur.salesAmount.toLocaleString()}／稅額 NT${" "}
+              {cur.taxAmount.toLocaleString()}）
+            </span>
             <button type="button" className="csv-col-btn" onClick={() => setExpOpen((v) => !v)}>
               {expOpen ? "−" : "+"}
             </button>
@@ -273,8 +276,20 @@ export function CashierReviewPage() {
                   <span className="csv-mono">{cur.invoiceNo ?? "—"}</span>
                 </div>
                 <div className="csv-mini-row">
-                  <span>金額</span>
-                  <span className="csv-amt">NT$ {cur.amount.toLocaleString()}</span>
+                  <span>型態</span>
+                  <span>{cur.receiptType === "invoice" ? "發票" : "收據"}</span>
+                </div>
+                <div className="csv-mini-row">
+                  <span>總額</span>
+                  <span className="csv-amt">NT$ {cur.totalAmount.toLocaleString()}</span>
+                </div>
+                <div className="csv-mini-row">
+                  <span>銷售額</span>
+                  <span className="csv-amt">NT$ {cur.salesAmount.toLocaleString()}</span>
+                </div>
+                <div className="csv-mini-row">
+                  <span>稅額</span>
+                  <span className="csv-amt">NT$ {cur.taxAmount.toLocaleString()}</span>
                 </div>
               </div>
             </div>

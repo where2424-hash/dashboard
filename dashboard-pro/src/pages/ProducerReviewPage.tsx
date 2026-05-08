@@ -96,7 +96,7 @@ export function ProducerReviewPage() {
   }, [id]);
 
   const lines = useMemo(() => {
-    if (row && DEMO_LINES.reduce((s, l) => s + l.amount, 0) === row.amount) return DEMO_LINES;
+    if (row && DEMO_LINES.reduce((s, l) => s + l.amount, 0) === row.totalAmount) return DEMO_LINES;
     if (!row) return [];
     return [
       {
@@ -105,7 +105,7 @@ export function ProducerReviewPage() {
         date: row.expenseDate?.replace(/-/g, "/") ?? "—",
         invoice: row.invoiceNo ?? "—",
         category: row.category,
-        amount: row.amount,
+        amount: row.totalAmount,
         summary: row.summary || "—"
       }
     ];
@@ -381,7 +381,7 @@ export function ProducerReviewPage() {
                     <th style={{ width: 78 }}>單據日期</th>
                     <th style={{ width: 98 }}>發票號碼</th>
                     <th style={{ width: 72 }}>分類</th>
-                    <th style={{ width: 82, textAlign: "right" }}>金額</th>
+                    <th style={{ width: 82, textAlign: "right" }}>總額</th>
                     <th>摘要</th>
                   </tr>
                 </thead>
@@ -614,7 +614,7 @@ export function ProducerReviewPage() {
                 <span>{lightbox.date}</span>
               </div>
               <div className="prv-lb-row">
-                <span>金額</span>
+                <span>總額</span>
                 <span>{lightbox.amt}</span>
               </div>
               <div className="prv-lb-row">

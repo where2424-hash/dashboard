@@ -25,7 +25,14 @@ export interface ExpenseRequest {
   project: string;
   applicant: string;
   category: string;
-  amount: number;
+  /** PRD v5：含稅總金額（原 amount/金額改名） */
+  totalAmount: number;
+  /** PRD v5：invoice=發票 / receipt=收據 */
+  receiptType: "invoice" | "receipt";
+  /** PRD v5：系統計算（totalAmount × 0.05，無條件捨去至整數） */
+  taxAmount: number;
+  /** PRD v5：系統計算（totalAmount - taxAmount） */
+  salesAmount: number;
   summary: string;
   status: RequestStatus;
   updatedAt: string;

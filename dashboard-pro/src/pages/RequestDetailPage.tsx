@@ -85,8 +85,20 @@ export function RequestDetailPage({ role }: { role: Role }) {
               <dd>{row.category}</dd>
             </div>
             <div className="rd-dl__row">
-              <dt>金額</dt>
-              <dd className="rd-amount">${row.amount.toLocaleString()}</dd>
+              <dt>型態</dt>
+              <dd>{row.receiptType === "invoice" ? "發票" : "收據"}</dd>
+            </div>
+            <div className="rd-dl__row">
+              <dt>總額</dt>
+              <dd className="rd-amount">NT$ {row.totalAmount.toLocaleString()}</dd>
+            </div>
+            <div className="rd-dl__row">
+              <dt>銷售額</dt>
+              <dd>NT$ {row.salesAmount.toLocaleString()}</dd>
+            </div>
+            <div className="rd-dl__row">
+              <dt>稅額</dt>
+              <dd>NT$ {row.taxAmount.toLocaleString()}</dd>
             </div>
             <div className="rd-dl__row">
               <dt>摘要</dt>

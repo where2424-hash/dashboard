@@ -42,11 +42,11 @@ export function App() {
   const projectNav = useMemo(() => {
     if (workspace === "company") {
       return [
-        { to: "/company/overview", label: "公司專案總覽", icon: "overview" },
-        { to: "/company/expenses", label: "報帳系統（公司）", icon: "expense", badge: "12" },
-        { to: "/company/members", label: "公司成員管理", icon: "members" },
-        { to: "/company/settings", label: "公司設定", icon: "document" },
-        { to: "/company/audit", label: "公司稽核紀錄", icon: "history" }
+        { to: "/company/overview", label: "團隊專案總覽", icon: "overview" },
+        { to: "/company/expenses", label: "報帳系統（團隊）", icon: "expense", badge: "12" },
+        { to: "/company/members", label: "團隊成員管理", icon: "members" },
+        { to: "/company/settings", label: "團隊設定", icon: "document" },
+        { to: "/company/audit", label: "團隊稽核紀錄", icon: "history" }
       ];
     }
     return [
@@ -164,12 +164,12 @@ export function App() {
               className={workspace === "company" ? "ws-btn ws-btn-active" : "ws-btn"}
               onClick={() => setWorkspace("company")}
             >
-              公司工作區
+              團隊工作區
             </button>
           </div>
           {workspace === "company" ? (
             <div className="project-pill workspace-company-row">
-              <div className="project-icon">公</div>
+              <div className="project-icon">團</div>
               <select
                 className="pill-select"
                 value={activeCompanyId}
@@ -182,7 +182,7 @@ export function App() {
                 ))}
               </select>
               <NavLink to="/company/new" className="ws-create-link">
-                建立公司
+                建立團隊
               </NavLink>
             </div>
           ) : (
@@ -196,7 +196,7 @@ export function App() {
           {projectNav.map((item, idx) => (
             <div key={item.to}>
               {idx === 1 && workspace === "personal" ? <div className="nav-label">專案模組</div> : null}
-              {idx === 0 && workspace === "company" ? <div className="nav-label">公司工作區</div> : null}
+              {idx === 0 && workspace === "company" ? <div className="nav-label">團隊工作區</div> : null}
               <NavLink
                 to={item.to}
                 className={({ isActive }) => (isActive ? "nav active" : "nav")}

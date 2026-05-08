@@ -1,14 +1,28 @@
 import type { ApplicationType, ExpenseRequest, RequestStatus } from "./types";
 
 /** PRD v4：草稿亦使用正式流水號格式（示意 MMA#） */
+function calcTaxAmount(totalAmount: number): number {
+  return Math.floor(totalAmount * 0.05);
+}
+
+function withV5Amounts(input: Omit<ExpenseRequest, "taxAmount" | "salesAmount">): ExpenseRequest {
+  const taxAmount = calcTaxAmount(input.totalAmount);
+  return {
+    ...input,
+    taxAmount,
+    salesAmount: input.totalAmount - taxAmount
+  };
+}
+
 let requests: ExpenseRequest[] = [
-  {
+  withV5Amounts({
     id: "1",
     requestNo: "MMA#00021",
     project: "牧馬專案 A",
     applicant: "Eric Wang",
     category: "交通費",
-    amount: 3500,
+    receiptType: "invoice",
+    totalAmount: 3500,
     summary: "勘景交通補貼",
     status: "producer_review",
     updatedAt: "2026-05-05 09:30",
@@ -16,14 +30,15 @@ let requests: ExpenseRequest[] = [
     expenseDate: "2026-04-17",
     applicationType: "reimbursement",
     bankMasked: "玉山 0012****5678"
-  },
-  {
+  }),
+  withV5Amounts({
     id: "2",
     requestNo: "MMA#00022",
     project: "牧馬專案 A",
     applicant: "Amy Chen",
     category: "餐飲費",
-    amount: 1200,
+    receiptType: "receipt",
+    totalAmount: 1200,
     summary: "工作餐敘",
     status: "draft",
     updatedAt: "2026-05-04 15:20",
@@ -31,14 +46,15 @@ let requests: ExpenseRequest[] = [
     expenseDate: "2026-04-18",
     applicationType: "reimbursement",
     bankMasked: "台新 0034****9012"
-  },
-  {
+  }),
+  withV5Amounts({
     id: "3",
     requestNo: "MMA#00018",
     project: "牧馬專案 B",
     applicant: "Patrick Lin",
     category: "道具費",
-    amount: 8800,
+    receiptType: "invoice",
+    totalAmount: 8800,
     summary: "場景道具租借",
     status: "awaiting_physical_receipts",
     updatedAt: "2026-05-03 17:10",
@@ -46,14 +62,15 @@ let requests: ExpenseRequest[] = [
     expenseDate: "2026-04-19",
     applicationType: "unpaid",
     bankMasked: "國泰 0022****3456"
-  },
-  {
+  }),
+  withV5Amounts({
     id: "4",
     requestNo: "MMA#00015",
     project: "牧馬專案 B",
     applicant: "Kevin Liu",
     category: "交通費",
-    amount: 2600,
+    receiptType: "receipt",
+    totalAmount: 2600,
     summary: "外景交通",
     status: "closed",
     updatedAt: "2026-04-28 11:00",
@@ -61,14 +78,15 @@ let requests: ExpenseRequest[] = [
     expenseDate: "2026-04-20",
     applicationType: "reimbursement",
     bankMasked: "中信 0045****6789"
-  },
-  {
+  }),
+  withV5Amounts({
     id: "5",
     requestNo: "MMA#00012",
     project: "牧馬專案 C",
     applicant: "Stella Wu",
     category: "後製費",
-    amount: 5400,
+    receiptType: "invoice",
+    totalAmount: 5400,
     summary: "剪接外包費",
     status: "payment_pending",
     updatedAt: "2026-05-01 14:20",
@@ -76,14 +94,15 @@ let requests: ExpenseRequest[] = [
     expenseDate: "2026-04-21",
     applicationType: "overage",
     bankMasked: "玉山 0056****7890"
-  },
-  {
+  }),
+  withV5Amounts({
     id: "6",
     requestNo: "MMA#00009",
     project: "夏日廣告 B",
     applicant: "Sandy Ho",
     category: "器材費",
-    amount: 6200,
+    receiptType: "receipt",
+    totalAmount: 6200,
     summary: "租借攝影燈",
     status: "producer_review",
     updatedAt: "2026-05-02 10:15",
@@ -91,14 +110,15 @@ let requests: ExpenseRequest[] = [
     expenseDate: "2026-04-15",
     applicationType: "reimbursement",
     bankMasked: "中信 0067****8901"
-  },
-  {
+  }),
+  withV5Amounts({
     id: "7",
     requestNo: "MMA#00007",
     project: "年終特輯 C",
     applicant: "Eric Wang",
     category: "材料費",
-    amount: 1980,
+    receiptType: "invoice",
+    totalAmount: 1980,
     summary: "道具製作材料",
     status: "closed",
     updatedAt: "2026-04-10 16:40",
@@ -106,14 +126,15 @@ let requests: ExpenseRequest[] = [
     expenseDate: "2026-03-28",
     applicationType: "surplus",
     bankMasked: "玉山 0012****5678"
-  },
-  {
+  }),
+  withV5Amounts({
     id: "8",
     requestNo: "MMA#00005",
     project: "年終特輯 C",
     applicant: "Molly Wu",
     category: "交通費",
-    amount: 4560,
+    receiptType: "receipt",
+    totalAmount: 4560,
     summary: "來回高雄拍攝",
     status: "awaiting_physical_receipts",
     updatedAt: "2026-04-08 09:00",
@@ -121,14 +142,15 @@ let requests: ExpenseRequest[] = [
     expenseDate: "2026-03-22",
     applicationType: "unpaid",
     bankMasked: "富邦 0078****9012"
-  },
-  {
+  }),
+  withV5Amounts({
     id: "9",
     requestNo: "MMA#00004",
     project: "牧馬專案 A",
     applicant: "Lisa Wu",
     category: "場地費",
-    amount: 15000,
+    receiptType: "invoice",
+    totalAmount: 15000,
     summary: "結餘補款—外景器材",
     status: "treasury_review",
     updatedAt: "2026-05-06 10:00",
@@ -136,22 +158,23 @@ let requests: ExpenseRequest[] = [
     expenseDate: "2026-05-02",
     applicationType: "overage",
     bankMasked: "玉山 0012****5678"
-  },
+  }),
   /** 製片審核 mock：尚未選定申請類型（對齊 cashier_detail / INV 編號示意） */
-  {
+  withV5Amounts({
     id: "10",
     requestNo: "INV-2604-001",
     project: "牧馬專案 A",
     applicant: "Eric Wang",
     category: "交通費",
-    amount: 3500,
+    receiptType: "invoice",
+    totalAmount: 3500,
     summary: "04/25 拍攝日勘景交通費用補貼",
     status: "producer_review",
     updatedAt: "2026-04-17 14:32",
     invoiceNo: "AB-12345678",
     expenseDate: "2026-04-17",
     bankMasked: "玉山 0012****5678"
-  }
+  })
 ];
 
 const wait = (ms = 180) => new Promise((resolve) => setTimeout(resolve, ms));
@@ -166,13 +189,15 @@ export async function getRequestById(id: string): Promise<ExpenseRequest | undef
   return requests.find((r) => r.id === id);
 }
 
-export async function createRequest(input: Omit<ExpenseRequest, "id" | "updatedAt">) {
+export async function createRequest(
+  input: Omit<ExpenseRequest, "id" | "updatedAt" | "taxAmount" | "salesAmount">
+) {
   await wait();
-  const row: ExpenseRequest = {
+  const row = withV5Amounts({
     ...input,
     id: String(Date.now()),
     updatedAt: new Date().toISOString().slice(0, 16).replace("T", " ")
-  };
+  });
   requests = [row, ...requests];
   return row;
 }

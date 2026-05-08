@@ -238,7 +238,7 @@ export function ProjectOverviewPage() {
                 <>
                   <div className="po-if"><label>專案名稱</label><input className="bi" value={infoDraft.name} onChange={(e) => setInfoDraft({ ...infoDraft, name: e.target.value })} /></div>
                   <div className="po-if"><label>客戶</label><input className="bi" value={infoDraft.client} onChange={(e) => setInfoDraft({ ...infoDraft, client: e.target.value })} /></div>
-                  <div className="po-if"><label>所屬公司</label><input className="bi" value={infoDraft.company} onChange={(e) => setInfoDraft({ ...infoDraft, company: e.target.value })} /></div>
+                  <div className="po-if"><label>所屬團隊</label><input className="bi" value={infoDraft.company} onChange={(e) => setInfoDraft({ ...infoDraft, company: e.target.value })} /></div>
                   <div className="po-if"><label>專案簡碼</label><input className="bi" value={infoDraft.code} onChange={(e) => setInfoDraft({ ...infoDraft, code: e.target.value })} /></div>
                   <div className="po-if"><label>開始日期</label><input className="bi" value={infoDraft.start} onChange={(e) => setInfoDraft({ ...infoDraft, start: e.target.value })} /></div>
                   <div className="po-if"><label>預計結束</label><input className="bi" value={infoDraft.end} onChange={(e) => setInfoDraft({ ...infoDraft, end: e.target.value })} /></div>
@@ -253,7 +253,7 @@ export function ProjectOverviewPage() {
                 <>
                   <div className="po-if"><label>專案名稱</label><div>{info.name}</div></div>
                   <div className="po-if"><label>客戶</label><div>{info.client}</div></div>
-                  <div className="po-if"><label>所屬公司</label><div>{info.company}</div></div>
+                  <div className="po-if"><label>所屬團隊</label><div>{info.company}</div></div>
                   <div className="po-if"><label>專案簡碼</label><div className="po-mono">{info.code}</div></div>
                   <div className="po-if"><label>開始日期</label><div>{info.start}</div></div>
                   <div className="po-if"><label>預計結束</label><div>{info.end}</div></div>

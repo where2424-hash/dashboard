@@ -32,6 +32,10 @@ function toCsvCell(v: unknown): string {
   return /[",\n]/.test(s) ? `"${s.replace(/"/g, "\"\"")}"` : s;
 }
 
+function receiptTypeLabel(t: ExpenseRequest["receiptType"]): string {
+  return t === "invoice" ? "發票" : "收據";
+}
+
 export function ExpensesPage({ role }: { role: Role }) {
   const nav = useNavigate();
   const [rows, setRows] = useState<ExpenseRequest[]>([]);
@@ -97,7 +101,10 @@ export function ExpensesPage({ role }: { role: Role }) {
       "單據日期",
       "請款人",
       "發票編號",
-      "金額",
+      "型態",
+      "總額",
+      "銷售額",
+      "稅額",
       "分類",
       "摘要",
       "帳戶",
@@ -111,7 +118,10 @@ export function ExpensesPage({ role }: { role: Role }) {
         formatExpenseDate(r.expenseDate),
         r.applicant,
         r.invoiceNo ?? "",
-        `NT$ ${r.amount.toLocaleString()}`,
+        receiptTypeLabel(r.receiptType),
+        `NT$ ${r.totalAmount.toLocaleString()}`,
+        `NT$ ${r.salesAmount.toLocaleString()}`,
+        `NT$ ${r.taxAmount.toLocaleString()}`,
         r.category,
         r.summary,
         r.bankMasked ?? "",
@@ -136,7 +146,9 @@ export function ExpensesPage({ role }: { role: Role }) {
       <header className="exp-ov-head">
         <div className="exp-ov-head-text">
           <h2 className="exp-ov-title">報帳總表</h2>
-          <p className="exp-ov-sub">依 PRD v4：列表顯示流水號、單據日期、遮罩帳戶與狀態；點列進入明細。</p>
+          <p className="exp-ov-sub">
+            依 PRD v5：列表新增型態、總額/銷售額/稅額；點列進入明細。
+          </p>
         </div>
         <div className="exp-ov-head-actions">
           <Link to="/expenses/new" className="exp-ov-tb-btn exp-ov-tb-btn--secondary">
@@ -267,7 +279,10 @@ export function ExpensesPage({ role }: { role: Role }) {
                 <th>單據日期</th>
                 <th>請款人</th>
                 <th>發票編號</th>
-                <th>金額</th>
+                <th>型態</th>
+                <th>總額</th>
+                <th>銷售額</th>
+                <th>稅額</th>
                 <th>分類</th>
                 <th>摘要</th>
                 <th>帳戶</th>
@@ -298,7 +313,10 @@ export function ExpensesPage({ role }: { role: Role }) {
                   <td>{formatExpenseDate(r.expenseDate)}</td>
                   <td>{r.applicant}</td>
                   <td className="exp-ov-mono">{r.invoiceNo ?? "—"}</td>
-                  <td className="exp-ov-amt">NT$ {r.amount.toLocaleString()}</td>
+                  <td>{receiptTypeLabel(r.receiptType)}</td>
+                  <td className="exp-ov-amt">NT$ {r.totalAmount.toLocaleString()}</td>
+                  <td className="exp-ov-amt">NT$ {r.salesAmount.toLocaleString()}</td>
+                  <td className="exp-ov-amt">NT$ {r.taxAmount.toLocaleString()}</td>
                   <td>
                     <span className="exp-ov-tag">{r.category}</span>
                   </td>
