@@ -36,6 +36,31 @@ function receiptTypeLabel(t: ExpenseRequest["receiptType"]): string {
   return t === "invoice" ? "發票" : "收據";
 }
 
+function yyyymmFromIso(iso?: string): string {
+  if (!iso?.trim()) return "";
+  // Expect YYYY-MM-DD
+  const m = iso.match(/^(\d{4})-(\d{2})/);
+  return m ? `${m[1]}-${m[2]}` : "";
+}
+
+type PaymentRequestSummary = {
+  id: string; // representative row id for navigation
+  paymentRequestNo: string;
+  project: string;
+  applicant: string;
+  appliedAt: string; // YYYY-MM-DD (from updatedAt)
+  totalAmount: number;
+  status: RequestStatus;
+  anyReceiptType: ExpenseRequest["receiptType"];
+};
+
+function appliedDateFromUpdatedAt(updatedAt: string): string {
+  if (!updatedAt?.trim()) return "";
+  // mockApi uses "YYYY-MM-DD HH:mm"
+  const m = updatedAt.match(/^(\d{4}-\d{2}-\d{2})/);
+  return m ? m[1] : updatedAt.slice(0, 10);
+}
+
 export function ExpensesPage({ role }: { role: Role }) {
   const nav = useNavigate();
   const [rows, setRows] = useState<ExpenseRequest[]>([]);
@@ -43,6 +68,7 @@ export function ExpensesPage({ role }: { role: Role }) {
   const [tab, setTab] = useState<TabKey>("todo");
   const [filterOpen, setFilterOpen] = useState(false);
   const [statusFilter, setStatusFilter] = useState<RequestStatus | "">("");
+  // (v5) list is payment-request summaries; per-item preview moved to detail page
 
   async function reload() {
     setRows(await listRequests());
@@ -52,16 +78,48 @@ export function ExpensesPage({ role }: { role: Role }) {
     void reload();
   }, []);
 
+  const paymentRequests = useMemo((): PaymentRequestSummary[] => {
+    const byNo = new Map<string, PaymentRequestSummary>();
+    for (const r of rows) {
+      const key = r.paymentRequestNo;
+      const prev = byNo.get(key);
+      if (!prev) {
+        byNo.set(key, {
+          id: r.id,
+          paymentRequestNo: r.paymentRequestNo,
+          project: r.project,
+          applicant: r.applicant,
+          appliedAt: appliedDateFromUpdatedAt(r.updatedAt),
+          totalAmount: r.totalAmount,
+          status: r.status,
+          anyReceiptType: r.receiptType
+        });
+      } else {
+        prev.totalAmount += r.totalAmount;
+        // pick latest updatedAt row as representative for status/date/id (simple)
+        if (r.updatedAt > prev.appliedAt) {
+          prev.id = r.id;
+          prev.status = r.status;
+          prev.appliedAt = appliedDateFromUpdatedAt(r.updatedAt);
+          prev.project = r.project;
+          prev.applicant = r.applicant;
+          prev.anyReceiptType = r.receiptType;
+        }
+      }
+    }
+    return Array.from(byNo.values()).sort((a, b) => b.appliedAt.localeCompare(a.appliedAt));
+  }, [rows]);
+
   const byTab = useMemo(() => {
     const todoSet = new Set(roleTodoStatuses(role));
-    return rows.filter((r) => {
+    return paymentRequests.filter((r) => {
       if (tab === "all") return true;
       if (tab === "mine") return r.applicant === CURRENT_USER_NAME;
       if (tab === "draft") return r.status === "draft";
       if (tab === "todo") return todoSet.has(r.status);
       return true;
     });
-  }, [rows, role, tab]);
+  }, [paymentRequests, role, tab]);
 
   const filtered = useMemo(() => {
     const q = keyword.trim().toLowerCase();
@@ -70,14 +128,11 @@ export function ExpensesPage({ role }: { role: Role }) {
     if (!q) return withStatus;
     return withStatus.filter((r) => {
       const blob = [
-        r.requestNo,
+        r.paymentRequestNo,
         r.project,
         r.applicant,
-        r.category,
-        r.summary,
-        r.invoiceNo ?? "",
+        r.appliedAt,
         REQUEST_STATUS_LABEL[r.status],
-        r.bankMasked ?? ""
       ]
         .join("|")
         .toLowerCase();
@@ -87,46 +142,47 @@ export function ExpensesPage({ role }: { role: Role }) {
 
   const tabCounts = useMemo(() => {
     const todoSet = new Set(roleTodoStatuses(role));
-    const all = rows.length;
-    const mine = rows.filter((r) => r.applicant === CURRENT_USER_NAME).length;
-    const todo = rows.filter((r) => todoSet.has(r.status)).length;
-    const draft = rows.filter((r) => r.status === "draft").length;
+    const all = paymentRequests.length;
+    const mine = paymentRequests.filter((r) => r.applicant === CURRENT_USER_NAME).length;
+    const todo = paymentRequests.filter((r) => todoSet.has(r.status)).length;
+    const draft = paymentRequests.filter((r) => r.status === "draft").length;
     return { all, mine, todo, draft };
-  }, [rows, role]);
+  }, [paymentRequests, role]);
+
+  const statsCards = useMemo(() => {
+    const now = new Date();
+    const yymm = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, "0")}`;
+    const thisMonth = paymentRequests.filter((r) => yyyymmFromIso(r.appliedAt) === yymm);
+
+    const monthTotal = thisMonth.reduce((s, r) => s + (r.totalAmount || 0), 0);
+    const monthCount = thisMonth.length;
+
+    const reviewingCount = paymentRequests.filter((r) => r.status === "producer_review" || r.status === "treasury_review").length;
+    const awaitingCount = paymentRequests.filter((r) => r.status === "awaiting_physical_receipts").length;
+    const closedCount = paymentRequests.filter((r) => r.status === "closed").length;
+
+    return { yymm, monthTotal, monthCount, reviewingCount, awaitingCount, closedCount };
+  }, [paymentRequests]);
 
   function exportCsv() {
     const header = [
-      "流水號",
+      "請款單編號",
       "專案名稱",
-      "單據日期",
+      "申請日期",
       "請款人",
-      "發票編號",
-      "型態",
-      "總額",
-      "銷售額",
-      "稅額",
-      "分類",
-      "摘要",
-      "帳戶",
+      "申請總額",
       "狀態",
       "最後更新"
     ].join(",");
     const lines = filtered.map((r) =>
       [
-        r.requestNo,
+        r.paymentRequestNo,
         r.project,
-        formatExpenseDate(r.expenseDate),
+        formatExpenseDate(r.appliedAt),
         r.applicant,
-        r.invoiceNo ?? "",
-        receiptTypeLabel(r.receiptType),
         `NT$ ${r.totalAmount.toLocaleString()}`,
-        `NT$ ${r.salesAmount.toLocaleString()}`,
-        `NT$ ${r.taxAmount.toLocaleString()}`,
-        r.category,
-        r.summary,
-        r.bankMasked ?? "",
         REQUEST_STATUS_LABEL[r.status],
-        r.updatedAt
+        r.appliedAt
       ]
         .map(toCsvCell)
         .join(",")
@@ -159,6 +215,31 @@ export function ExpensesPage({ role }: { role: Role }) {
           </Link>
         </div>
       </header>
+
+      <div className="exp-stats" aria-label="報帳總表摘要">
+        <div className="exp-stat exp-stat--blue">
+          <div className="exp-stat__label">本月申請總額</div>
+          <div className="exp-stat__value">{statsCards.monthTotal.toLocaleString()}</div>
+          <div className="exp-stat__sub">
+            NT$ · 共 {statsCards.monthCount} 筆（{statsCards.yymm}）
+          </div>
+        </div>
+        <div className="exp-stat exp-stat--orange">
+          <div className="exp-stat__label">審核中</div>
+          <div className="exp-stat__value">{statsCards.reviewingCount}</div>
+          <div className="exp-stat__sub">等待核准</div>
+        </div>
+        <div className="exp-stat exp-stat--purple">
+          <div className="exp-stat__label">等待實體單據</div>
+          <div className="exp-stat__value">{statsCards.awaitingCount}</div>
+          <div className="exp-stat__sub">請儘速提交</div>
+        </div>
+        <div className="exp-stat exp-stat--green">
+          <div className="exp-stat__label">已結案</div>
+          <div className="exp-stat__value">{statsCards.closedCount}</div>
+          <div className="exp-stat__sub">本月完成</div>
+        </div>
+      </div>
 
       <ExpenseOverviewFlow />
 
@@ -274,18 +355,11 @@ export function ExpensesPage({ role }: { role: Role }) {
                 <th className="exp-ov-th-check">
                   <input type="checkbox" className="exp-ov-cb" aria-label="全選" disabled />
                 </th>
-                <th>流水號</th>
+                <th>請款單編號</th>
                 <th>專案名稱</th>
-                <th>單據日期</th>
+                <th>申請日期</th>
                 <th>請款人</th>
-                <th>發票編號</th>
-                <th>型態</th>
-                <th>總額</th>
-                <th>銷售額</th>
-                <th>稅額</th>
-                <th>分類</th>
-                <th>摘要</th>
-                <th>帳戶</th>
+                <th>申請總額</th>
                 <th>狀態</th>
                 <th>操作</th>
               </tr>
@@ -293,7 +367,7 @@ export function ExpensesPage({ role }: { role: Role }) {
             <tbody>
               {filtered.map((r) => (
                 <tr
-                  key={r.id}
+                  key={r.paymentRequestNo}
                   className="exp-ov-row"
                   onClick={() => nav(`/expenses/${r.id}`)}
                   role="link"
@@ -306,22 +380,13 @@ export function ExpensesPage({ role }: { role: Role }) {
                   }}
                 >
                   <td onClick={(e) => e.stopPropagation()}>
-                    <input type="checkbox" className="exp-ov-cb" aria-label={`選取 ${r.requestNo}`} />
+                    <input type="checkbox" className="exp-ov-cb" aria-label={`選取 ${r.paymentRequestNo}`} />
                   </td>
-                  <td className="exp-ov-serial">{r.requestNo}</td>
+                  <td className="exp-ov-serial">{r.paymentRequestNo}</td>
                   <td>{r.project}</td>
-                  <td>{formatExpenseDate(r.expenseDate)}</td>
+                  <td>{formatExpenseDate(r.appliedAt)}</td>
                   <td>{r.applicant}</td>
-                  <td className="exp-ov-mono">{r.invoiceNo ?? "—"}</td>
-                  <td>{receiptTypeLabel(r.receiptType)}</td>
                   <td className="exp-ov-amt">NT$ {r.totalAmount.toLocaleString()}</td>
-                  <td className="exp-ov-amt">NT$ {r.salesAmount.toLocaleString()}</td>
-                  <td className="exp-ov-amt">NT$ {r.taxAmount.toLocaleString()}</td>
-                  <td>
-                    <span className="exp-ov-tag">{r.category}</span>
-                  </td>
-                  <td className="exp-ov-summary">{r.summary}</td>
-                  <td className="exp-ov-bank">{r.bankMasked ?? "—"}</td>
                   <td>
                     <span className={expenseListBadgeClass(r.status)}>
                       ● {REQUEST_STATUS_LABEL[r.status]}
@@ -357,6 +422,7 @@ export function ExpensesPage({ role }: { role: Role }) {
           </button>
         </div>
       </div>
+
     </section>
   );
 }

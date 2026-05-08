@@ -2,7 +2,7 @@ import { useEffect, useState } from "react";
 import { Link, useParams } from "react-router-dom";
 import { ExpenseFlowDiagramV4 } from "../components/ExpenseFlowDiagramV4";
 import { APPLICATION_TYPE_LABEL, REQUEST_STATUS_LABEL, requestStatusBadgeClass } from "../expenseStatus";
-import { getRequestById, updateStatus } from "../mockApi";
+import { getRequestById, listRequestsByPaymentRequestNo, updateStatus } from "../mockApi";
 import type { ExpenseRequest, Role } from "../types";
 
 const MOCK_AUDIT = [
@@ -13,6 +13,8 @@ const MOCK_AUDIT = [
 export function RequestDetailPage({ role }: { role: Role }) {
   const { id } = useParams();
   const [row, setRow] = useState<ExpenseRequest | null | undefined>(undefined);
+  const [items, setItems] = useState<ExpenseRequest[]>([]);
+  const [preview, setPreview] = useState<null | ExpenseRequest>(null);
 
   useEffect(() => {
     if (!id) {
@@ -22,6 +24,11 @@ export function RequestDetailPage({ role }: { role: Role }) {
     void (async () => {
       const data = await getRequestById(id);
       setRow(data ?? null);
+      if (data) {
+        setItems(await listRequestsByPaymentRequestNo(data.paymentRequestNo));
+      } else {
+        setItems([]);
+      }
     })();
   }, [id]);
 
@@ -35,6 +42,7 @@ export function RequestDetailPage({ role }: { role: Role }) {
     (role === "treasury" || role === "admin") &&
     (row.status === "treasury_review" || row.status === "awaiting_physical_receipts" || row.status === "payment_pending");
   const typeLabel = row.applicationType ? APPLICATION_TYPE_LABEL[row.applicationType] : "—（送出後由製片選定）";
+  const totalAmount = items.reduce((s, it) => s + it.totalAmount, 0);
 
   return (
     <section className="request-detail">
@@ -47,7 +55,7 @@ export function RequestDetailPage({ role }: { role: Role }) {
       <header className="rd-header">
         <div>
           <h2 className="rd-title">報帳明細</h2>
-          <p className="rd-sub">{row.requestNo}</p>
+          <p className="rd-sub">{row.paymentRequestNo}</p>
         </div>
         <div className="rd-header-actions">
           <span className={requestStatusBadgeClass(row.status)}>{REQUEST_STATUS_LABEL[row.status]}</span>
@@ -69,6 +77,10 @@ export function RequestDetailPage({ role }: { role: Role }) {
           <h3 className="rd-card__title">請款資訊</h3>
           <dl className="rd-dl">
             <div className="rd-dl__row">
+              <dt>請款單編號</dt>
+              <dd>{row.paymentRequestNo}</dd>
+            </div>
+            <div className="rd-dl__row">
               <dt>專案</dt>
               <dd>{row.project}</dd>
             </div>
@@ -89,34 +101,68 @@ export function RequestDetailPage({ role }: { role: Role }) {
               <dd>{row.receiptType === "invoice" ? "發票" : "收據"}</dd>
             </div>
             <div className="rd-dl__row">
-              <dt>總額</dt>
-              <dd className="rd-amount">NT$ {row.totalAmount.toLocaleString()}</dd>
-            </div>
-            <div className="rd-dl__row">
-              <dt>銷售額</dt>
-              <dd>NT$ {row.salesAmount.toLocaleString()}</dd>
-            </div>
-            <div className="rd-dl__row">
-              <dt>稅額</dt>
-              <dd>NT$ {row.taxAmount.toLocaleString()}</dd>
+              <dt>申請總額</dt>
+              <dd className="rd-amount">NT$ {totalAmount.toLocaleString()}</dd>
             </div>
             <div className="rd-dl__row">
               <dt>摘要</dt>
               <dd>{row.summary || "—"}</dd>
             </div>
             <div className="rd-dl__row">
-              <dt>發票號碼</dt>
-              <dd>{row.invoiceNo ?? "—"}</dd>
-            </div>
-            <div className="rd-dl__row">
-              <dt>費用發生日期</dt>
-              <dd>{row.expenseDate ?? "—"}</dd>
-            </div>
-            <div className="rd-dl__row">
               <dt>最後更新</dt>
               <dd>{row.updatedAt}</dd>
             </div>
           </dl>
+
+          <div className="rd-placeholder-block">
+            <h4 className="rd-placeholder-block__title">報帳明細（{items.length} 筆）</h4>
+            <div className="exp-ov-table-scroll">
+              <table className="exp-ov-table">
+                <thead>
+                  <tr>
+                    <th>流水號</th>
+                    <th>縮圖</th>
+                    <th>單據日期</th>
+                    <th>型態</th>
+                    <th>發票編號</th>
+                    <th style={{ textAlign: "right" }}>總額</th>
+                    <th style={{ textAlign: "right" }}>銷售額</th>
+                    <th style={{ textAlign: "right" }}>稅額</th>
+                    <th>分類</th>
+                    <th>摘要</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {items.map((it) => (
+                    <tr key={it.id}>
+                      <td className="exp-ov-serial">{it.expenseNo}</td>
+                      <td>
+                        <button type="button" className="exp-ov-thumb" onClick={() => setPreview(it)} title="預覽">
+                          <span aria-hidden>🧾</span>
+                        </button>
+                      </td>
+                      <td>{it.expenseDate ?? "—"}</td>
+                      <td>{it.receiptType === "invoice" ? "發票" : "收據"}</td>
+                      <td className="exp-ov-mono">{it.receiptType === "receipt" ? "—" : (it.invoiceNo ?? "—")}</td>
+                      <td className="exp-ov-amt" style={{ textAlign: "right" }}>
+                        NT$ {it.totalAmount.toLocaleString()}
+                      </td>
+                      <td className="exp-ov-amt" style={{ textAlign: "right" }}>
+                        NT$ {it.salesAmount.toLocaleString()}
+                      </td>
+                      <td className="exp-ov-amt" style={{ textAlign: "right" }}>
+                        NT$ {it.taxAmount.toLocaleString()}
+                      </td>
+                      <td>
+                        <span className="exp-ov-tag">{it.category}</span>
+                      </td>
+                      <td className="exp-ov-summary">{it.summary}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          </div>
 
           <div className="rd-placeholder-block">
             <h4 className="rd-placeholder-block__title">附件</h4>
@@ -167,6 +213,31 @@ export function RequestDetailPage({ role }: { role: Role }) {
         <h3 className="rd-card__title">流程總表（PRD v4）</h3>
         <ExpenseFlowDiagramV4 applicationType={row.applicationType ?? "reimbursement"} currentStatus={row.status} />
       </div>
+
+      {preview ? (
+        <button
+          type="button"
+          className="prv-lb-overlay"
+          onClick={() => setPreview(null)}
+          aria-label="關閉預覽"
+        >
+          <div className="prv-lb-card" onClick={(e) => e.stopPropagation()}>
+            <div className="prv-lb-top">
+              <span>
+                {preview.expenseNo} · {preview.receiptType === "invoice" ? "發票" : "收據"}
+              </span>
+              <button type="button" className="prv-lb-x" onClick={() => setPreview(null)}>
+                ×
+              </button>
+            </div>
+            <div className="prv-lb-img" aria-hidden>
+              <svg viewBox="0 0 20 20" fill="none">
+                <path d="M4 2h8.5L16 5.5V18H4V2z" stroke="var(--color-text-tertiary)" strokeWidth="1.1" />
+              </svg>
+            </div>
+          </div>
+        </button>
+      ) : null}
     </section>
   );
 }

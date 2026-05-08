@@ -11,6 +11,15 @@ type ProjectInfo = {
   start: string;
   end: string;
   owner: string;
+  projectType?: "廣告" | "電影" | "活動" | "其他";
+  shootDate?: string;
+  shootDays?: number;
+  modules?: {
+    members: boolean;
+    schedule: boolean;
+    document: boolean;
+    expenses: boolean;
+  };
   status: "進行中" | "暫停" | "已結案";
 };
 
@@ -42,6 +51,29 @@ const STORAGE_KEYS = {
   perms: "project-overview-perms-v1"
 };
 
+function projectCodeFromName(name: string): string {
+  const map: Record<string, string> = {
+    "牧馬專案 A": "MMA",
+    "牧馬專案 B": "MMB",
+    "牧馬專案 C": "MMC",
+    "夏日廣告 B": "SAB",
+    "年終特輯 C": "YEC"
+  };
+  return map[name] ?? "PRJ";
+}
+
+function defaultInfoForProject(projectName: string): ProjectInfo {
+  return {
+    ...defaultInfo,
+    name: projectName,
+    code: projectCodeFromName(projectName)
+  };
+}
+
+function keyForProject(base: string, projectName: string): string {
+  return `${base}:${projectName}`;
+}
+
 const defaultInfo: ProjectInfo = {
   name: "牧馬專案 A",
   client: "中華電信",
@@ -50,6 +82,10 @@ const defaultInfo: ProjectInfo = {
   start: "2026/03/01",
   end: "2026/06/30",
   owner: "Patrick Lin",
+  projectType: "廣告",
+  shootDate: "2026/03/15",
+  shootDays: 2,
+  modules: { members: true, schedule: true, document: true, expenses: true },
   status: "進行中"
 };
 
@@ -113,21 +149,52 @@ export function ProjectOverviewPage() {
     }
   }
 
+  const [activeProjectName, setActiveProjectName] = useState(() => {
+    try {
+      return window.localStorage.getItem("active-project-name") ?? defaultInfo.name;
+    } catch {
+      return defaultInfo.name;
+    }
+  });
+
+  // sync with sidebar project dropdown
+  useEffect(() => {
+    function onStorage(e: StorageEvent) {
+      if (e.key === "active-project-name" && e.newValue) setActiveProjectName(e.newValue);
+    }
+    function onActiveProjectEvent(e: Event) {
+      const ce = e as CustomEvent<string>;
+      if (typeof ce.detail === "string" && ce.detail.trim()) setActiveProjectName(ce.detail);
+    }
+    window.addEventListener("storage", onStorage);
+    window.addEventListener("active-project-name-changed", onActiveProjectEvent as EventListener);
+    return () => {
+      window.removeEventListener("storage", onStorage);
+      window.removeEventListener("active-project-name-changed", onActiveProjectEvent as EventListener);
+    };
+  }, []);
+
   const [role, setRole] = useState<Role>("manager");
   const isManager = role === "manager";
   const isFinance = role === "manager" || role === "finance";
 
-  const [info, setInfo] = useState<ProjectInfo>(() => loadStored(STORAGE_KEYS.info, defaultInfo));
+  const [info, setInfo] = useState<ProjectInfo>(() =>
+    loadStored(keyForProject(STORAGE_KEYS.info, activeProjectName), defaultInfoForProject(activeProjectName))
+  );
   const [infoDraft, setInfoDraft] = useState<ProjectInfo>(info);
   const [editingInfo, setEditingInfo] = useState(false);
 
-  const [incomeRows, setIncomeRows] = useState<IncomeRow[]>(() => loadStored(STORAGE_KEYS.incomes, defaultIncomeRows));
+  const [incomeRows, setIncomeRows] = useState<IncomeRow[]>(() =>
+    loadStored(keyForProject(STORAGE_KEYS.incomes, activeProjectName), defaultIncomeRows)
+  );
   const [incomeDraft, setIncomeDraft] = useState<IncomeRow[]>(incomeRows);
   const [incomeHistory, setIncomeHistory] = useState<IncomeRow[][]>([]);
   const [editingIncome, setEditingIncome] = useState(false);
   const [incomeError, setIncomeError] = useState("");
 
-  const [expenseRows, setExpenseRows] = useState<ExpenseRow[]>(() => loadStored(STORAGE_KEYS.expenses, defaultExpenseRows));
+  const [expenseRows, setExpenseRows] = useState<ExpenseRow[]>(() =>
+    loadStored(keyForProject(STORAGE_KEYS.expenses, activeProjectName), defaultExpenseRows)
+  );
   const [expenseDraft, setExpenseDraft] = useState<ExpenseRow[]>(expenseRows);
   const [expenseHistory, setExpenseHistory] = useState<ExpenseRow[][]>([]);
   const [editingExpense, setEditingExpense] = useState(false);
@@ -139,21 +206,42 @@ export function ProjectOverviewPage() {
   ];
 
   const [permEditing, setPermEditing] = useState(false);
-  const [perm, setPerm] = useState(() => loadStored(STORAGE_KEYS.perms, defaultPerm));
+  const [perm, setPerm] = useState(() => loadStored(keyForProject(STORAGE_KEYS.perms, activeProjectName), defaultPerm));
   const [permDraft, setPermDraft] = useState(perm);
 
+  // When active project changes, load corresponding stored data.
   useEffect(() => {
-    window.localStorage.setItem(STORAGE_KEYS.info, JSON.stringify(info));
-  }, [info]);
+    setEditingInfo(false);
+    setEditingIncome(false);
+    setEditingExpense(false);
+    setPermEditing(false);
+    const nextInfo = loadStored(keyForProject(STORAGE_KEYS.info, activeProjectName), defaultInfoForProject(activeProjectName));
+    const nextIncome = loadStored(keyForProject(STORAGE_KEYS.incomes, activeProjectName), defaultIncomeRows);
+    const nextExpense = loadStored(keyForProject(STORAGE_KEYS.expenses, activeProjectName), defaultExpenseRows);
+    const nextPerm = loadStored(keyForProject(STORAGE_KEYS.perms, activeProjectName), defaultPerm);
+    setInfo(nextInfo);
+    setInfoDraft(nextInfo);
+    setIncomeRows(nextIncome);
+    setIncomeDraft(nextIncome);
+    setExpenseRows(nextExpense);
+    setExpenseDraft(nextExpense);
+    setPerm(nextPerm);
+    setPermDraft(nextPerm);
+    setIncomeError("");
+  }, [activeProjectName]);
+
   useEffect(() => {
-    window.localStorage.setItem(STORAGE_KEYS.incomes, JSON.stringify(incomeRows));
-  }, [incomeRows]);
+    window.localStorage.setItem(keyForProject(STORAGE_KEYS.info, activeProjectName), JSON.stringify(info));
+  }, [activeProjectName, info]);
   useEffect(() => {
-    window.localStorage.setItem(STORAGE_KEYS.expenses, JSON.stringify(expenseRows));
-  }, [expenseRows]);
+    window.localStorage.setItem(keyForProject(STORAGE_KEYS.incomes, activeProjectName), JSON.stringify(incomeRows));
+  }, [activeProjectName, incomeRows]);
   useEffect(() => {
-    window.localStorage.setItem(STORAGE_KEYS.perms, JSON.stringify(perm));
-  }, [perm]);
+    window.localStorage.setItem(keyForProject(STORAGE_KEYS.expenses, activeProjectName), JSON.stringify(expenseRows));
+  }, [activeProjectName, expenseRows]);
+  useEffect(() => {
+    window.localStorage.setItem(keyForProject(STORAGE_KEYS.perms, activeProjectName), JSON.stringify(perm));
+  }, [activeProjectName, perm]);
 
   const summary = useMemo(() => {
     const receivable = incomeRows.reduce((s, x) => s + x.receivable, 0);
@@ -197,11 +285,7 @@ export function ProjectOverviewPage() {
 
   return (
     <section className="po-page">
-      <div className="po-topbar">
-        <span className="po-breadcrumb">報帳系統</span>
-        <span className="po-sep">/</span>
-        <span className="po-title">牧馬專案 A</span>
-      </div>
+      {/* 專案總覽頁不顯示「報帳系統 / 專案」麵包屑列；專案切換由 sidebar 下拉控制 */}
 
       <div className="po-rolebar">
         <span>Mockup 角色切換：</span>
@@ -240,6 +324,55 @@ export function ProjectOverviewPage() {
                   <div className="po-if"><label>客戶</label><input className="bi" value={infoDraft.client} onChange={(e) => setInfoDraft({ ...infoDraft, client: e.target.value })} /></div>
                   <div className="po-if"><label>所屬團隊</label><input className="bi" value={infoDraft.company} onChange={(e) => setInfoDraft({ ...infoDraft, company: e.target.value })} /></div>
                   <div className="po-if"><label>專案簡碼</label><input className="bi" value={infoDraft.code} onChange={(e) => setInfoDraft({ ...infoDraft, code: e.target.value })} /></div>
+                  <div className="po-if"><label>專案類型</label>
+                    <select
+                      className="bi"
+                      value={infoDraft.projectType ?? "其他"}
+                      onChange={(e) => setInfoDraft({ ...infoDraft, projectType: e.target.value as NonNullable<ProjectInfo["projectType"]> })}
+                    >
+                      <option value="廣告">廣告</option>
+                      <option value="電影">電影</option>
+                      <option value="活動">活動</option>
+                      <option value="其他">其他</option>
+                    </select>
+                  </div>
+                  <div className="po-if"><label>預計拍攝日期</label><input className="bi" value={infoDraft.shootDate ?? ""} onChange={(e) => setInfoDraft({ ...infoDraft, shootDate: e.target.value })} /></div>
+                  <div className="po-if"><label>拍攝區間（天）</label>
+                    <input
+                      className="bi"
+                      value={String(infoDraft.shootDays ?? "")}
+                      onChange={(e) => {
+                        const raw = e.target.value.trim();
+                        const n = raw === "" ? undefined : Number(raw);
+                        setInfoDraft({ ...infoDraft, shootDays: Number.isFinite(n as number) ? (n as number) : undefined });
+                      }}
+                    />
+                  </div>
+                  <div className="po-if"><label>啟用模組</label>
+                    <div style={{ display: "flex", gap: 10, flexWrap: "wrap", paddingTop: 6 }}>
+                      {(["members", "schedule", "document", "expenses"] as const).map((k) => (
+                        <label key={k} style={{ display: "inline-flex", gap: 6, alignItems: "center", fontSize: 12 }}>
+                          <input
+                            type="checkbox"
+                            checked={infoDraft.modules?.[k] ?? true}
+                            onChange={(e) =>
+                              setInfoDraft({
+                                ...infoDraft,
+                                modules: {
+                                  members: infoDraft.modules?.members ?? true,
+                                  schedule: infoDraft.modules?.schedule ?? true,
+                                  document: infoDraft.modules?.document ?? true,
+                                  expenses: infoDraft.modules?.expenses ?? true,
+                                  [k]: e.target.checked
+                                }
+                              })
+                            }
+                          />
+                          {k === "members" ? "成員清單" : k === "schedule" ? "Schedule" : k === "document" ? "Document" : "報帳系統"}
+                        </label>
+                      ))}
+                    </div>
+                  </div>
                   <div className="po-if"><label>開始日期</label><input className="bi" value={infoDraft.start} onChange={(e) => setInfoDraft({ ...infoDraft, start: e.target.value })} /></div>
                   <div className="po-if"><label>預計結束</label><input className="bi" value={infoDraft.end} onChange={(e) => setInfoDraft({ ...infoDraft, end: e.target.value })} /></div>
                   <div className="po-if"><label>負責人</label><input className="bi" value={infoDraft.owner} onChange={(e) => setInfoDraft({ ...infoDraft, owner: e.target.value })} /></div>
@@ -255,6 +388,17 @@ export function ProjectOverviewPage() {
                   <div className="po-if"><label>客戶</label><div>{info.client}</div></div>
                   <div className="po-if"><label>所屬團隊</label><div>{info.company}</div></div>
                   <div className="po-if"><label>專案簡碼</label><div className="po-mono">{info.code}</div></div>
+                  <div className="po-if"><label>專案類型</label><div>{info.projectType ?? "—"}</div></div>
+                  <div className="po-if"><label>預計拍攝日期</label><div>{info.shootDate ?? "—"}</div></div>
+                  <div className="po-if"><label>拍攝區間（天）</label><div>{typeof info.shootDays === "number" ? `${info.shootDays} 天` : "—"}</div></div>
+                  <div className="po-if"><label>啟用模組</label>
+                    <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
+                      {(info.modules?.members ?? true) ? <span className="badge badge-blue">成員清單</span> : null}
+                      {(info.modules?.schedule ?? true) ? <span className="badge badge-blue">Schedule</span> : null}
+                      {(info.modules?.document ?? true) ? <span className="badge badge-blue">Document</span> : null}
+                      {(info.modules?.expenses ?? true) ? <span className="badge badge-blue">報帳系統</span> : null}
+                    </div>
+                  </div>
                   <div className="po-if"><label>開始日期</label><div>{info.start}</div></div>
                   <div className="po-if"><label>預計結束</label><div>{info.end}</div></div>
                   <div className="po-if"><label>負責人</label><div>{info.owner}</div></div>

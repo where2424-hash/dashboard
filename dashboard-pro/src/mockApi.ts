@@ -6,7 +6,7 @@ function calcTaxAmount(totalAmount: number): number {
 }
 
 function withV5Amounts(input: Omit<ExpenseRequest, "taxAmount" | "salesAmount">): ExpenseRequest {
-  const taxAmount = calcTaxAmount(input.totalAmount);
+  const taxAmount = input.receiptType === "receipt" ? 0 : calcTaxAmount(input.totalAmount);
   return {
     ...input,
     taxAmount,
@@ -14,10 +14,76 @@ function withV5Amounts(input: Omit<ExpenseRequest, "taxAmount" | "salesAmount">)
   };
 }
 
+function toYyMm(isoDate: Date): string {
+  const yy = String(isoDate.getFullYear()).slice(-2);
+  const mm = String(isoDate.getMonth() + 1).padStart(2, "0");
+  return `${yy}${mm}`;
+}
+
+function projectCodeFromProjectSettings(projectName: string): string | null {
+  // 來源：ProjectOverviewPage 專案總覽（localStorage）
+  try {
+    const raw = window.localStorage.getItem("project-overview-info-v1");
+    if (!raw) return null;
+    const info = JSON.parse(raw) as { name?: string; code?: string };
+    if (!info?.name || !info?.code) return null;
+    if (info.name.trim() !== (projectName ?? "").trim()) return null;
+    const code = info.code.trim().toUpperCase();
+    if (!/^[A-Z0-9]{2,6}$/.test(code)) return null;
+    return code.slice(0, 3);
+  } catch {
+    return null;
+  }
+}
+
+function projectCodeFromName(project: string): string {
+  // 優先：Project 設定（可由使用者在專案總覽編輯）
+  const fromSettings = projectCodeFromProjectSettings(project);
+  if (fromSettings) return fromSettings;
+
+  // fallback：mock 專案對照
+  const trimmed = (project ?? "").trim();
+  const map: Record<string, string> = {
+    "牧馬專案 A": "MMA",
+    "牧馬專案 B": "MMB",
+    "牧馬專案 C": "MMC",
+    "夏日廣告 B": "SAB",
+    "年終特輯 C": "YEC"
+  };
+  if (map[trimmed]) return map[trimmed];
+
+  // fallback：從名稱抽取英數 token
+  const m = trimmed.match(/[A-Za-z0-9]+/g);
+  const token = m?.[0] ?? "PRJ";
+  return token.slice(0, 3).toUpperCase().padEnd(3, "X");
+}
+
+const expenseSeqByProject: Record<string, number> = {};
+let paymentReqSeqByYyMm: Record<string, number> = {};
+
+function nextExpenseNo(projectName: string): string {
+  const code = projectCodeFromName(projectName);
+  const cur = expenseSeqByProject[code] ?? 0;
+  const next = cur + 1;
+  expenseSeqByProject[code] = next;
+  return `${code}#${String(next).padStart(5, "0")}`;
+}
+
+function nextPaymentRequestNo(now = new Date()): string {
+  // PRD v5：{團隊簡碼}-{YYMM}-{序號三碼}
+  const teamCode = "MUY";
+  const yymm = toYyMm(now);
+  const cur = paymentReqSeqByYyMm[yymm] ?? 0;
+  const next = cur + 1;
+  paymentReqSeqByYyMm = { ...paymentReqSeqByYyMm, [yymm]: next };
+  return `${teamCode}-${yymm}-${String(next).padStart(3, "0")}`;
+}
+
 let requests: ExpenseRequest[] = [
   withV5Amounts({
     id: "1",
-    requestNo: "MMA#00021",
+    expenseNo: "MMA#00021",
+    paymentRequestNo: "MUY-2604-001",
     project: "牧馬專案 A",
     applicant: "Eric Wang",
     category: "交通費",
@@ -33,7 +99,8 @@ let requests: ExpenseRequest[] = [
   }),
   withV5Amounts({
     id: "2",
-    requestNo: "MMA#00022",
+    expenseNo: "MMA#00022",
+    paymentRequestNo: "MUY-2604-001",
     project: "牧馬專案 A",
     applicant: "Amy Chen",
     category: "餐飲費",
@@ -49,7 +116,8 @@ let requests: ExpenseRequest[] = [
   }),
   withV5Amounts({
     id: "3",
-    requestNo: "MMA#00018",
+    expenseNo: "MMB#00018",
+    paymentRequestNo: "MUY-2604-002",
     project: "牧馬專案 B",
     applicant: "Patrick Lin",
     category: "道具費",
@@ -65,7 +133,8 @@ let requests: ExpenseRequest[] = [
   }),
   withV5Amounts({
     id: "4",
-    requestNo: "MMA#00015",
+    expenseNo: "MMB#00015",
+    paymentRequestNo: "MUY-2604-002",
     project: "牧馬專案 B",
     applicant: "Kevin Liu",
     category: "交通費",
@@ -81,7 +150,8 @@ let requests: ExpenseRequest[] = [
   }),
   withV5Amounts({
     id: "5",
-    requestNo: "MMA#00012",
+    expenseNo: "MMC#00012",
+    paymentRequestNo: "MUY-2604-003",
     project: "牧馬專案 C",
     applicant: "Stella Wu",
     category: "後製費",
@@ -97,7 +167,8 @@ let requests: ExpenseRequest[] = [
   }),
   withV5Amounts({
     id: "6",
-    requestNo: "MMA#00009",
+    expenseNo: "SAB#00009",
+    paymentRequestNo: "MUY-2604-004",
     project: "夏日廣告 B",
     applicant: "Sandy Ho",
     category: "器材費",
@@ -113,7 +184,8 @@ let requests: ExpenseRequest[] = [
   }),
   withV5Amounts({
     id: "7",
-    requestNo: "MMA#00007",
+    expenseNo: "YEC#00007",
+    paymentRequestNo: "MUY-2603-001",
     project: "年終特輯 C",
     applicant: "Eric Wang",
     category: "材料費",
@@ -129,7 +201,8 @@ let requests: ExpenseRequest[] = [
   }),
   withV5Amounts({
     id: "8",
-    requestNo: "MMA#00005",
+    expenseNo: "YEC#00005",
+    paymentRequestNo: "MUY-2603-001",
     project: "年終特輯 C",
     applicant: "Molly Wu",
     category: "交通費",
@@ -145,7 +218,8 @@ let requests: ExpenseRequest[] = [
   }),
   withV5Amounts({
     id: "9",
-    requestNo: "MMA#00004",
+    expenseNo: "MMA#00004",
+    paymentRequestNo: "MUY-2605-001",
     project: "牧馬專案 A",
     applicant: "Lisa Wu",
     category: "場地費",
@@ -162,7 +236,8 @@ let requests: ExpenseRequest[] = [
   /** 製片審核 mock：尚未選定申請類型（對齊 cashier_detail / INV 編號示意） */
   withV5Amounts({
     id: "10",
-    requestNo: "INV-2604-001",
+    expenseNo: "MMA#00001",
+    paymentRequestNo: "MUY-2604-005",
     project: "牧馬專案 A",
     applicant: "Eric Wang",
     category: "交通費",
@@ -184,19 +259,30 @@ export async function listRequests() {
   return requests;
 }
 
+export async function listRequestsByPaymentRequestNo(paymentRequestNo: string) {
+  await wait();
+  return requests.filter((r) => r.paymentRequestNo === paymentRequestNo);
+}
+
 export async function getRequestById(id: string): Promise<ExpenseRequest | undefined> {
   await wait();
   return requests.find((r) => r.id === id);
 }
 
 export async function createRequest(
-  input: Omit<ExpenseRequest, "id" | "updatedAt" | "taxAmount" | "salesAmount">
+  input: Omit<ExpenseRequest, "id" | "updatedAt" | "taxAmount" | "salesAmount" | "expenseNo" | "paymentRequestNo"> & {
+    expenseNo?: string;
+    paymentRequestNo?: string;
+  }
 ) {
   await wait();
+  const now = new Date();
   const row = withV5Amounts({
     ...input,
+    expenseNo: input.expenseNo ?? nextExpenseNo(input.project),
+    paymentRequestNo: input.paymentRequestNo ?? nextPaymentRequestNo(now),
     id: String(Date.now()),
-    updatedAt: new Date().toISOString().slice(0, 16).replace("T", " ")
+    updatedAt: now.toISOString().slice(0, 16).replace("T", " ")
   });
   requests = [row, ...requests];
   return row;

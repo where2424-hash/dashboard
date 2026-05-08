@@ -21,7 +21,10 @@ export interface User {
 
 export interface ExpenseRequest {
   id: string;
-  requestNo: string;
+  /** 單筆費用流水號：{專案簡碼}#00001 */
+  expenseNo: string;
+  /** 請款單編號：{團隊簡碼}-{YYMM}-{序號}（例：MUY-2604-001） */
+  paymentRequestNo: string;
   project: string;
   applicant: string;
   category: string;

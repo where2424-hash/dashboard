@@ -140,15 +140,19 @@ function calcTaxAmount(totalAmount: number): number {
   return Math.floor(totalAmount * 0.05);
 }
 
-function calcSalesAmount(totalAmount: number): number {
-  return totalAmount - calcTaxAmount(totalAmount);
+function calcSalesAmount(totalAmount: number, receiptType: UploadRow["receiptType"]): number {
+  return totalAmount - calcTaxAmountByType(totalAmount, receiptType);
+}
+
+function calcTaxAmountByType(totalAmount: number, receiptType: UploadRow["receiptType"]): number {
+  return receiptType === "receipt" ? 0 : calcTaxAmount(totalAmount);
 }
 
 function isRowComplete(u: UploadRow): boolean {
   return (
     u.date.trim() !== "" &&
-    u.inv.trim() !== "" &&
     u.receiptType !== "" &&
+    (u.receiptType === "receipt" ? true : u.inv.trim() !== "") &&
     u.cat !== "" &&
     u.amt > 0 &&
     u.sum.trim() !== ""
@@ -178,7 +182,13 @@ export function NewRequestPage() {
   const [view, setView] = useState<"form" | "draft">("form");
 
   const [applicant, setApplicant] = useState("Eric Wang");
-  const [project, setProject] = useState("牧馬專案 A");
+  const [project, setProject] = useState(() => {
+    try {
+      return window.localStorage.getItem("active-project-name") ?? "牧馬專案 A";
+    } catch {
+      return "牧馬專案 A";
+    }
+  });
   const [requestDate, setRequestDate] = useState("2026/04/25");
   const [summaryNote, setSummaryNote] = useState("");
   const [projConflict, setProjConflict] = useState(false);
@@ -207,6 +217,16 @@ export function NewRequestPage() {
   const [draftPanelOpen, setDraftPanelOpen] = useState(false);
   const [drafts, setDrafts] = useState<ExpenseRequest[]>([]);
   const [draftSel, setDraftSel] = useState<Record<string, boolean>>({});
+
+  // sync with sidebar project dropdown without refresh
+  useEffect(() => {
+    function onActiveProjectEvent(e: Event) {
+      const ce = e as CustomEvent<string>;
+      if (typeof ce.detail === "string" && ce.detail.trim()) setProject(ce.detail);
+    }
+    window.addEventListener("active-project-name-changed", onActiveProjectEvent as EventListener);
+    return () => window.removeEventListener("active-project-name-changed", onActiveProjectEvent as EventListener);
+  }, []);
 
   async function reloadDrafts() {
     const all = await listRequests();
@@ -331,7 +351,7 @@ export function NewRequestPage() {
       for (const d of sel) {
         next.push({
           id: `u${uidSeq++}`,
-          name: `draft_${d.requestNo}.pdf`,
+          name: `draft_${d.expenseNo}.pdf`,
           size: "—",
           batch: 1,
           status: "ok",
@@ -343,7 +363,7 @@ export function NewRequestPage() {
           sum: d.summary,
           tmp: tempSeq++,
           checked: true,
-          expenseNo: d.requestNo
+          expenseNo: d.expenseNo
         });
       }
       return next;
@@ -426,7 +446,6 @@ export function NewRequestPage() {
     const summaryText =
       summaryParts.length > 0 ? summaryParts.slice(0, 3).join("；") : "報帳申請";
     await createRequest({
-      requestNo: `MUY-2605-${String(Math.floor(Math.random() * 900) + 100)}`,
       project,
       applicant,
       category: catLabel,
@@ -474,7 +493,8 @@ export function NewRequestPage() {
             </button>
           </div>
 
-          <div className="enr-scroll-area" ref={scrollRef}>
+          <div className="enr-body">
+            <div className="enr-scroll-area" ref={scrollRef}>
             {/* 草稿橫幅（draft_page_v4：可展開、可勾選帶入） */}
             <button
               type="button"
@@ -568,7 +588,7 @@ export function NewRequestPage() {
                             />
                           </td>
                           <td>
-                            <span className="enr-dp-sn">{d.requestNo}</span>
+                            <span className="enr-dp-sn">{d.expenseNo}</span>
                           </td>
                           <td>
                             <span className="enr-dp-thumb" aria-hidden>
@@ -833,8 +853,8 @@ export function NewRequestPage() {
                         <th style={{ width: 88 }}>流水號</th>
                         <th style={{ width: 22 }}>收據</th>
                         <th style={{ width: 82 }}>單據日期 *</th>
-                        <th style={{ width: 98 }}>發票號碼 *</th>
                         <th style={{ width: 72 }}>型態 *</th>
+                        <th style={{ width: 98 }}>發票號碼 *</th>
                         <th style={{ width: 80 }}>分類 *</th>
                         <th style={{ width: 72 }}>總額 *</th>
                         <th style={{ width: 72 }}>銷售額</th>
@@ -918,14 +938,6 @@ export function NewRequestPage() {
                               />
                             </td>
                             <td>
-                              <input
-                                className={u.inv === "" ? "enr-ef enr-ef-err" : "enr-ef"}
-                                value={u.inv}
-                                placeholder="發票號碼"
-                                onChange={(e) => patchUpload(u.id, "inv", e.target.value)}
-                              />
-                            </td>
-                            <td>
                               <select
                                 className={u.receiptType === "" ? "enr-cs enr-cs-err" : "enr-cs"}
                                 value={u.receiptType}
@@ -935,6 +947,15 @@ export function NewRequestPage() {
                                 <option value="invoice">發票</option>
                                 <option value="receipt">收據</option>
                               </select>
+                            </td>
+                            <td>
+                              <input
+                                className={u.receiptType !== "receipt" && u.inv === "" ? "enr-ef enr-ef-err" : "enr-ef"}
+                                value={u.inv}
+                                placeholder={u.receiptType === "receipt" ? "（收據免填）" : "發票號碼"}
+                                onChange={(e) => patchUpload(u.id, "inv", e.target.value)}
+                                disabled={u.receiptType === "receipt"}
+                              />
                             </td>
                             <td>
                               <select
@@ -964,7 +985,7 @@ export function NewRequestPage() {
                             <td>
                               <input
                                 className="enr-ef"
-                                value={u.amt > 0 ? calcSalesAmount(u.amt).toLocaleString() : ""}
+                                value={u.amt > 0 ? calcSalesAmount(u.amt, u.receiptType).toLocaleString() : ""}
                                 placeholder="—"
                                 style={{ textAlign: "right" }}
                                 readOnly
@@ -973,7 +994,7 @@ export function NewRequestPage() {
                             <td>
                               <input
                                 className="enr-ef"
-                                value={u.amt > 0 ? calcTaxAmount(u.amt).toLocaleString() : ""}
+                                value={u.amt > 0 ? calcTaxAmountByType(u.amt, u.receiptType).toLocaleString() : ""}
                                 placeholder="—"
                                 style={{ textAlign: "right" }}
                                 readOnly
@@ -1192,6 +1213,53 @@ export function NewRequestPage() {
                 </div>
               </div>
             </div>
+            </div>
+
+            <aside className="enr-side" aria-label="申請後流程預覽">
+              <div className="enr-side-card">
+                <div className="enr-side-head">
+                  <span className="enr-side-ic" aria-hidden>
+                    🔄
+                  </span>
+                  <span className="enr-side-title">申請後流程預覽</span>
+                </div>
+                <div className="enr-side-body">
+                  <div className="enr-side-sub">送出後狀態流程</div>
+                  <ol className="enr-steps">
+                    <li className="enr-step enr-step--active">
+                      <span className="enr-dot enr-dot--active">●</span>
+                      <span className="enr-step-t">報帳申請</span>
+                      <span className="enr-step-s">等待製片審核</span>
+                    </li>
+                    <li className="enr-step">
+                      <span className="enr-dot">2</span>
+                      <span className="enr-step-t">審核-製片</span>
+                      <span className="enr-step-s">製片確認金額與申請類型</span>
+                    </li>
+                    <li className="enr-step">
+                      <span className="enr-dot">3</span>
+                      <span className="enr-step-t">依申請類型流程</span>
+                      <span className="enr-step-s">報銷 / 超支 / 結餘 / 未付款</span>
+                    </li>
+                    <li className="enr-step">
+                      <span className="enr-dot">4</span>
+                      <span className="enr-step-t">審核-出納</span>
+                      <span className="enr-step-s">出納核帳與出帳確認</span>
+                    </li>
+                    <li className="enr-step">
+                      <span className="enr-dot">5</span>
+                      <span className="enr-step-t">等待實體單據</span>
+                      <span className="enr-step-s">請提交正本收據</span>
+                    </li>
+                    <li className="enr-step">
+                      <span className="enr-dot enr-dot--done">✓</span>
+                      <span className="enr-step-t">結案</span>
+                      <span className="enr-step-s">流程完成</span>
+                    </li>
+                  </ol>
+                </div>
+              </div>
+            </aside>
           </div>
         </div>
       ) : (

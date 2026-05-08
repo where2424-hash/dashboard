@@ -100,7 +100,7 @@ export function ProducerReviewPage() {
     if (!row) return [];
     return [
       {
-        serial: row.requestNo.slice(0, 12),
+        serial: row.expenseNo,
         receipt: "receipt.jpg",
         date: row.expenseDate?.replace(/-/g, "/") ?? "—",
         invoice: row.invoiceNo ?? "—",
@@ -170,7 +170,7 @@ export function ProducerReviewPage() {
         <span className="prv-tb-div">/</span>
         <span className="prv-tb-title">製片審核</span>
         <span className="prv-tb-spacer" />
-        <span className="prv-inv-tag">{row.requestNo}</span>
+        <span className="prv-inv-tag">{row.paymentRequestNo}</span>
         <span className="prv-badge prv-badge--orange">{REQUEST_STATUS_LABEL[row.status]}</span>
       </header>
 
@@ -307,7 +307,7 @@ export function ProducerReviewPage() {
               <div className="prv-ig3">
                 <div>
                   <div className="prv-if-label">請款單編號</div>
-                  <div className="prv-if-val prv-if-mono-strong">{row.requestNo}</div>
+                  <div className="prv-if-val prv-if-mono-strong">{row.paymentRequestNo}</div>
                 </div>
                 <div>
                   <div className="prv-if-label">申請人</div>
@@ -353,7 +353,7 @@ export function ProducerReviewPage() {
                   </svg>
                 </div>
                 <div>
-                  <div className="prv-pdf-name">{row.requestNo}_報帳申請.pdf</div>
+                  <div className="prv-pdf-name">{row.paymentRequestNo}_報帳申請.pdf</div>
                   <div className="prv-pdf-sub">送出時自動產生・含申請內容與費用明細（示意）</div>
                 </div>
                 <button type="button" className="prv-btn-dl" onClick={() => alert("（Mock）下載 PDF")}>

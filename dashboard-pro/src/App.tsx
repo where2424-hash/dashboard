@@ -11,6 +11,8 @@ import { NotificationsPage } from "./pages/NotificationsPage";
 import { PlaceholderPage } from "./pages/PlaceholderPage";
 import { CompanySettingsPage } from "./pages/CompanySettingsPage";
 import { CompanyCreatePage } from "./pages/CompanyCreatePage";
+import { ProjectCreatePage } from "./pages/ProjectCreatePage";
+import { ProjectListPage } from "./pages/ProjectListPage";
 import { CompanyOverviewPage } from "./pages/CompanyOverviewPage";
 import { CompanyMembersPage } from "./pages/CompanyMembersPage";
 import { CompanyAuditPage } from "./pages/CompanyAuditPage";
@@ -29,6 +31,13 @@ export function App() {
   const [role, setRole] = useState<Role>("producer");
   const [workspace, setWorkspace] = useState<WorkspaceMode>("personal");
   const [activeCompanyId, setActiveCompanyId] = useState<string>("company-a");
+  const [activeProjectName, setActiveProjectName] = useState<string>(() => {
+    try {
+      return window.localStorage.getItem("active-project-name") ?? "牧馬專案 A";
+    } catch {
+      return "牧馬專案 A";
+    }
+  });
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
   const [notifOpen, setNotifOpen] = useState(false);
   const location = useLocation();
@@ -39,6 +48,27 @@ export function App() {
     ],
     []
   );
+  const [projectOptions, setProjectOptions] = useState<string[]>(() => {
+    const fallback = ["牧馬專案 A", "牧馬專案 B", "牧馬專案 C", "夏日廣告 B", "年終特輯 C"];
+    try {
+      const raw = window.localStorage.getItem("project-list-v1");
+      if (!raw) return fallback;
+      const list = JSON.parse(raw) as unknown;
+      if (!Array.isArray(list)) return fallback;
+      const names = list.map((x) => String(x)).filter(Boolean);
+      return names.length > 0 ? names : fallback;
+    } catch {
+      return fallback;
+    }
+  });
+
+  function broadcastActiveProject(next: string) {
+    try {
+      window.dispatchEvent(new CustomEvent("active-project-name-changed", { detail: next }));
+    } catch {
+      // ignore
+    }
+  }
   const projectNav = useMemo(() => {
     if (workspace === "company") {
       return [
@@ -51,7 +81,7 @@ export function App() {
     }
     return [
       { to: "/", label: "首頁", icon: "home" },
-      { to: "/projects/1/overview", label: "專案總覽", icon: "overview" },
+      { to: "/projects", label: "專案清單", icon: "overview" },
       { to: "/schedule", label: "日程表", icon: "schedule" },
       { to: "/labor", label: "勞報單", icon: "labor" },
       { to: "/expenses", label: "報帳系統", icon: "expense", badge: "3" },
@@ -187,8 +217,30 @@ export function App() {
             </div>
           ) : (
             <div className="project-pill">
-              <div className="project-icon">牧</div>
-              <span className="pill-name">牧馬專案 A</span>
+              <div className="project-icon">專</div>
+              <select
+                className="pill-select"
+                value={activeProjectName}
+                onChange={(e) => {
+                  const next = e.target.value;
+                  setActiveProjectName(next);
+                  try {
+                    window.localStorage.setItem("active-project-name", next);
+                  } catch {
+                    // ignore
+                  }
+                  broadcastActiveProject(next);
+                }}
+              >
+                {projectOptions.map((p) => (
+                  <option key={p} value={p}>
+                    {p}
+                  </option>
+                ))}
+              </select>
+              <NavLink to="/projects/new" className="ws-create-link">
+                建立專案
+              </NavLink>
             </div>
           )}
         </div>
@@ -248,6 +300,10 @@ export function App() {
                           ? "公司稽核紀錄"
                           : location.pathname.startsWith("/expenses/new")
                             ? "新增報帳申請"
+                    : location.pathname === "/projects"
+                      ? "專案清單"
+                    : location.pathname.startsWith("/projects/new")
+                      ? "建立專案"
                             : /\/expenses\/[^/]+\/review$/.test(location.pathname)
                               ? "製片審核"
                               : /\/expenses\/[^/]+\/cashier$/.test(location.pathname)
@@ -305,7 +361,13 @@ export function App() {
         <div className="content">
           <Routes>
             <Route path="/" element={<DashboardPage />} />
+            <Route path="/projects" element={<ProjectListPage />} />
             <Route path="/projects/:id/overview" element={<ProjectOverviewPage />} />
+            <Route path="/projects/new" element={<ProjectCreatePage onCreated={(name) => {
+              setProjectOptions((prev) => (prev.includes(name) ? prev : [name, ...prev]));
+              setActiveProjectName(name);
+              broadcastActiveProject(name);
+            }} />} />
             <Route path="/company/overview" element={<CompanyOverviewPage />} />
             <Route path="/company/expenses" element={<PlaceholderPage title="報帳系統（公司工作區）" />} />
             <Route path="/company/members" element={<CompanyMembersPage />} />

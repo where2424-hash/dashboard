@@ -134,7 +134,7 @@ export function CashierReviewPage() {
         <span className="csv-tb-div">/</span>
         <span className="csv-tb-title">出納審核</span>
         <span className="csv-tb-spacer" />
-        <span className="csv-inv-tag">{cur.requestNo}</span>
+        <span className="csv-inv-tag">{cur.paymentRequestNo}</span>
         <span className="csv-badge csv-badge--blue">{REQUEST_STATUS_LABEL[cur.status]}</span>
       </header>
 
@@ -225,7 +225,7 @@ export function CashierReviewPage() {
               <div className="csv-ig3">
                 <div>
                   <div className="csv-if-label">請款單編號</div>
-                    <div className="csv-if-val csv-if-mono-strong">{cur.requestNo}</div>
+                    <div className="csv-if-val csv-if-mono-strong">{cur.paymentRequestNo}</div>
                 </div>
                 <div>
                   <div className="csv-if-label">申請人</div>
