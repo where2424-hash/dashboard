@@ -2,6 +2,7 @@ import { useEffect, useState } from "react";
 import { Link } from "react-router-dom";
 import { listRequests, updateStatus } from "../mockApi";
 import type { ExpenseRequest, Role, RequestStatus } from "../types";
+import { getStatusActionForRole } from "../workflow";
 
 const statusText: Record<RequestStatus, string> = {
   draft: "Draft",
@@ -57,33 +58,37 @@ export function ExpensesPage({ role }: { role: Role }) {
           </tr>
         </thead>
         <tbody>
-          {filtered.map((r) => (
-            <tr key={r.id}>
-              <td>
-                <Link to={`/expenses/${r.id}`}>{r.requestNo}</Link>
-              </td>
-              <td>{r.project}</td>
-              <td>{r.applicant}</td>
-              <td>{r.category}</td>
-              <td>${r.amount.toLocaleString()}</td>
-              <td>{statusText[r.status]}</td>
-              <td>{r.updatedAt}</td>
-              <td>
-                {canApprove ? (
-                  <button
-                    onClick={async () => {
-                      await updateStatus(r.id, r.status === "done" ? "producer_review" : "done");
-                      await reload();
-                    }}
-                  >
-                    Toggle Done
-                  </button>
-                ) : (
-                  <span>-</span>
-                )}
-              </td>
-            </tr>
-          ))}
+          {filtered.map((r) => {
+            const action = canApprove ? getStatusActionForRole(r.status, role) : null;
+
+            return (
+              <tr key={r.id}>
+                <td>
+                  <Link to={`/expenses/${r.id}`}>{r.requestNo}</Link>
+                </td>
+                <td>{r.project}</td>
+                <td>{r.applicant}</td>
+                <td>{r.category}</td>
+                <td>${r.amount.toLocaleString()}</td>
+                <td>{statusText[r.status]}</td>
+                <td>{r.updatedAt}</td>
+                <td>
+                  {action ? (
+                    <button
+                      onClick={async () => {
+                        await updateStatus(r.id, action.nextStatus);
+                        await reload();
+                      }}
+                    >
+                      {action.label}
+                    </button>
+                  ) : (
+                    <span>-</span>
+                  )}
+                </td>
+              </tr>
+            );
+          })}
         </tbody>
       </table>
     </section>
