@@ -1,4 +1,5 @@
 import type { ExpenseRequest, RequestStatus } from "./types";
+import { canTransitionStatus } from "./workflow";
 
 let requests: ExpenseRequest[] = [
   {
@@ -57,7 +58,7 @@ export async function createRequest(input: Omit<ExpenseRequest, "id" | "updatedA
 export async function updateStatus(id: string, status: RequestStatus) {
   await wait();
   requests = requests.map((r) =>
-    r.id === id
+    r.id === id && canTransitionStatus(r.status, status)
       ? { ...r, status, updatedAt: new Date().toISOString().slice(0, 16).replace("T", " ") }
       : r
   );
