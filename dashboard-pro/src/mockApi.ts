@@ -1,4 +1,5 @@
-import type { ExpenseRequest, RequestStatus } from "./types";
+import type { ExpenseRequest, RequestStatus, Role } from "./types";
+import { canTransition } from "./workflow";
 
 let requests: ExpenseRequest[] = [
   {
@@ -54,11 +55,23 @@ export async function createRequest(input: Omit<ExpenseRequest, "id" | "updatedA
   return row;
 }
 
-export async function updateStatus(id: string, status: RequestStatus) {
+export async function updateStatus(id: string, status: RequestStatus, role: Role) {
   await wait();
-  requests = requests.map((r) =>
-    r.id === id
-      ? { ...r, status, updatedAt: new Date().toISOString().slice(0, 16).replace("T", " ") }
-      : r
-  );
+  const current = requests.find((r) => r.id === id);
+
+  if (!current) {
+    throw new Error(`Request ${id} was not found`);
+  }
+
+  if (!canTransition(role, current.status, status)) {
+    throw new Error(`Cannot transition request ${id} from ${current.status} to ${status}`);
+  }
+
+  const updated = {
+    ...current,
+    status,
+    updatedAt: new Date().toISOString().slice(0, 16).replace("T", " ")
+  };
+  requests = requests.map((r) => (r.id === id ? updated : r));
+  return updated;
 }
