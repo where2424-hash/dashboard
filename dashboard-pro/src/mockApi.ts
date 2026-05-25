@@ -1,4 +1,5 @@
-import type { ExpenseRequest, RequestStatus } from "./types";
+import type { ExpenseRequest, RequestStatus, Role } from "./types";
+import { canChangeStatus } from "./workflow";
 
 let requests: ExpenseRequest[] = [
   {
@@ -35,27 +36,38 @@ let requests: ExpenseRequest[] = [
     updatedAt: "2026-05-03 17:10"
   }
 ];
+let nextRequestId = requests.reduce((max, request) => Math.max(max, Number(request.id) || 0), 0) + 1;
 
 const wait = (ms = 180) => new Promise((resolve) => setTimeout(resolve, ms));
 
 export async function listRequests() {
   await wait();
-  return requests;
+  return [...requests];
 }
 
 export async function createRequest(input: Omit<ExpenseRequest, "id" | "updatedAt">) {
   await wait();
   const row: ExpenseRequest = {
     ...input,
-    id: String(Date.now()),
+    id: String(nextRequestId++),
     updatedAt: new Date().toISOString().slice(0, 16).replace("T", " ")
   };
   requests = [row, ...requests];
   return row;
 }
 
-export async function updateStatus(id: string, status: RequestStatus) {
+export async function updateStatus(id: string, status: RequestStatus, role: Role) {
   await wait();
+  const current = requests.find((r) => r.id === id);
+
+  if (!current) {
+    throw new Error(`Request ${id} was not found`);
+  }
+
+  if (!canChangeStatus(current.status, status, role)) {
+    throw new Error(`Cannot move request ${id} from ${current.status} to ${status} as ${role}`);
+  }
+
   requests = requests.map((r) =>
     r.id === id
       ? { ...r, status, updatedAt: new Date().toISOString().slice(0, 16).replace("T", " ") }

@@ -4,6 +4,7 @@ import { createRequest } from "../mockApi";
 
 export function NewRequestPage() {
   const nav = useNavigate();
+  const [isSubmitting, setIsSubmitting] = useState(false);
   const [form, setForm] = useState({
     requestNo: `MUY-2605-${String(Math.floor(Math.random() * 900) + 100)}`,
     project: "Project A",
@@ -52,13 +53,20 @@ export function NewRequestPage() {
           />
         </label>
         <button
+          disabled={isSubmitting}
           onClick={async () => {
-            if (!form.summary || form.amount <= 0) return;
-            await createRequest(form);
-            nav("/expenses");
+            if (isSubmitting || !form.summary || !Number.isFinite(form.amount) || form.amount <= 0) return;
+
+            setIsSubmitting(true);
+            try {
+              await createRequest(form);
+              nav("/expenses");
+            } finally {
+              setIsSubmitting(false);
+            }
           }}
         >
-          Submit Request
+          {isSubmitting ? "Submitting..." : "Submit Request"}
         </button>
       </div>
     </section>
