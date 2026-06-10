@@ -27,7 +27,7 @@ export function RequestDetailPage({ role }: { role: Role }) {
     };
   }, [id]);
 
-  if (isLoading) return <p>Loading request...</p>;
+  if (isLoading || (row && row.id !== id)) return <p>Loading request...</p>;
   if (!row) return <p>Request not found.</p>;
 
   const canReject = role === "producer" || role === "treasury" || role === "admin";
@@ -49,7 +49,7 @@ export function RequestDetailPage({ role }: { role: Role }) {
           <button
             onClick={async () => {
               const requestId = row.id;
-              await updateStatus(row.id, "rejected");
+              await updateStatus(requestId, "rejected");
               setRow((current) => (current?.id === requestId ? { ...current, status: "rejected" } : current));
             }}
           >
