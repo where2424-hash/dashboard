@@ -4,15 +4,23 @@ import { createRequest } from "../mockApi";
 
 export function NewRequestPage() {
   const nav = useNavigate();
+  const [isSubmitting, setIsSubmitting] = useState(false);
   const [form, setForm] = useState({
     requestNo: `MUY-2605-${String(Math.floor(Math.random() * 900) + 100)}`,
     project: "Project A",
     applicant: "Demo User",
     category: "Travel",
-    amount: 0,
+    amount: "",
     summary: "",
     status: "producer_review" as const
   });
+  const parsedAmount = Number(form.amount);
+  const canSubmit =
+    Boolean(form.summary.trim()) &&
+    form.amount.trim() !== "" &&
+    Number.isFinite(parsedAmount) &&
+    parsedAmount > 0 &&
+    !isSubmitting;
 
   return (
     <section>
@@ -41,7 +49,7 @@ export function NewRequestPage() {
           <input
             type="number"
             value={form.amount}
-            onChange={(e) => setForm({ ...form, amount: Number(e.target.value) })}
+            onChange={(e) => setForm({ ...form, amount: e.target.value })}
           />
         </label>
         <label>
@@ -52,13 +60,31 @@ export function NewRequestPage() {
           />
         </label>
         <button
+          disabled={!canSubmit}
           onClick={async () => {
-            if (!form.summary || form.amount <= 0) return;
-            await createRequest(form);
-            nav("/expenses");
+            const payload = {
+              ...form,
+              amount: Number(form.amount),
+              project: form.project.trim(),
+              applicant: form.applicant.trim(),
+              category: form.category.trim(),
+              summary: form.summary.trim()
+            };
+
+            if (!Number.isFinite(payload.amount) || payload.amount <= 0 || !payload.summary || isSubmitting) {
+              return;
+            }
+
+            setIsSubmitting(true);
+            try {
+              await createRequest(payload);
+              nav("/expenses");
+            } finally {
+              setIsSubmitting(false);
+            }
           }}
         >
-          Submit Request
+          {isSubmitting ? "Submitting..." : "Submit Request"}
         </button>
       </div>
     </section>
