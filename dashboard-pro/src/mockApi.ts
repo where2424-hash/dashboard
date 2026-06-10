@@ -40,13 +40,14 @@ const wait = (ms = 180) => new Promise((resolve) => setTimeout(resolve, ms));
 
 export async function listRequests() {
   await wait();
-  return requests;
+  return requests.map((request) => ({ ...request }));
 }
 
 export async function createRequest(input: Omit<ExpenseRequest, "id" | "updatedAt">) {
+  const snapshot = { ...input };
   await wait();
   const row: ExpenseRequest = {
-    ...input,
+    ...snapshot,
     id: String(Date.now()),
     updatedAt: new Date().toISOString().slice(0, 16).replace("T", " ")
   };
