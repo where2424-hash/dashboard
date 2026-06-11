@@ -2,6 +2,7 @@ import { useEffect, useState } from "react";
 import { useParams } from "react-router-dom";
 import { listRequests, updateStatus } from "../mockApi";
 import type { ExpenseRequest, Role } from "../types";
+import { canReject } from "../workflow";
 
 export function RequestDetailPage({ role }: { role: Role }) {
   const { id } = useParams();
@@ -16,7 +17,7 @@ export function RequestDetailPage({ role }: { role: Role }) {
 
   if (!row) return <p>Request not found.</p>;
 
-  const canReject = role === "producer" || role === "treasury" || role === "admin";
+  const rejectAllowed = canReject(role, row.status);
 
   return (
     <section>
@@ -31,11 +32,11 @@ export function RequestDetailPage({ role }: { role: Role }) {
         <p>Amount: ${row.amount.toLocaleString()}</p>
         <p>Summary: {row.summary}</p>
         <p>Status: {row.status}</p>
-        {canReject && (
+        {rejectAllowed && (
           <button
             onClick={async () => {
-              await updateStatus(row.id, "rejected");
-              setRow({ ...row, status: "rejected" });
+              const updated = await updateStatus(row.id, "rejected", role);
+              setRow(updated);
             }}
           >
             Reject

@@ -1,4 +1,5 @@
-import type { ExpenseRequest, RequestStatus } from "./types";
+import type { ExpenseRequest, RequestStatus, Role } from "./types";
+import { canTransition } from "./workflow";
 
 let requests: ExpenseRequest[] = [
   {
@@ -38,6 +39,13 @@ let requests: ExpenseRequest[] = [
 
 const wait = (ms = 180) => new Promise((resolve) => setTimeout(resolve, ms));
 
+let lastGeneratedId = Date.now();
+
+function createRequestId() {
+  lastGeneratedId = Math.max(Date.now(), lastGeneratedId + 1);
+  return String(lastGeneratedId);
+}
+
 export async function listRequests() {
   await wait();
   return requests;
@@ -47,18 +55,30 @@ export async function createRequest(input: Omit<ExpenseRequest, "id" | "updatedA
   await wait();
   const row: ExpenseRequest = {
     ...input,
-    id: String(Date.now()),
+    id: createRequestId(),
     updatedAt: new Date().toISOString().slice(0, 16).replace("T", " ")
   };
   requests = [row, ...requests];
   return row;
 }
 
-export async function updateStatus(id: string, status: RequestStatus) {
+export async function updateStatus(id: string, status: RequestStatus, role: Role) {
   await wait();
-  requests = requests.map((r) =>
-    r.id === id
-      ? { ...r, status, updatedAt: new Date().toISOString().slice(0, 16).replace("T", " ") }
-      : r
-  );
+  const current = requests.find((r) => r.id === id);
+
+  if (!current) {
+    throw new Error(`Request ${id} was not found`);
+  }
+
+  if (!canTransition(role, current.status, status)) {
+    throw new Error(`Cannot transition request ${id} from ${current.status} to ${status}`);
+  }
+
+  const updated: ExpenseRequest = {
+    ...current,
+    status,
+    updatedAt: new Date().toISOString().slice(0, 16).replace("T", " ")
+  };
+  requests = requests.map((r) => (r.id === id ? updated : r));
+  return updated;
 }
