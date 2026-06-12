@@ -36,6 +36,14 @@ let requests: ExpenseRequest[] = [
   }
 ];
 
+let lastGeneratedRequestId = Date.now();
+
+function createRequestId() {
+  const now = Date.now();
+  lastGeneratedRequestId = Math.max(now, lastGeneratedRequestId + 1);
+  return String(lastGeneratedRequestId);
+}
+
 const wait = (ms = 180) => new Promise((resolve) => setTimeout(resolve, ms));
 
 export async function listRequests() {
@@ -47,7 +55,7 @@ export async function createRequest(input: Omit<ExpenseRequest, "id" | "updatedA
   await wait();
   const row: ExpenseRequest = {
     ...input,
-    id: String(Date.now()),
+    id: createRequestId(),
     updatedAt: new Date().toISOString().slice(0, 16).replace("T", " ")
   };
   requests = [row, ...requests];
