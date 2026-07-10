@@ -9,7 +9,7 @@ export function NewRequestPage() {
     project: "Project A",
     applicant: "Demo User",
     category: "Travel",
-    amount: 0,
+    amount: "0",
     summary: "",
     status: "producer_review" as const
   });
@@ -41,7 +41,7 @@ export function NewRequestPage() {
           <input
             type="number"
             value={form.amount}
-            onChange={(e) => setForm({ ...form, amount: Number(e.target.value) })}
+            onChange={(e) => setForm({ ...form, amount: e.target.value })}
           />
         </label>
         <label>
@@ -53,8 +53,9 @@ export function NewRequestPage() {
         </label>
         <button
           onClick={async () => {
-            if (!form.summary || form.amount <= 0) return;
-            await createRequest(form);
+            const amount = Number(form.amount);
+            if (!form.summary || !Number.isFinite(amount) || amount <= 0) return;
+            await createRequest({ ...form, amount });
             nav("/expenses");
           }}
         >
